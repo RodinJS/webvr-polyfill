@@ -58,7 +58,7 @@ var kMiddleRadius = 0.75;
 var kInnerRadius = 0.3125;
 
 // Center line thickness in DP.
-var kCenterLineThicknessDp = 4;
+var kCenterLineThicknessDp = 2;
 
 // Button width in DP.
 var kButtonWidthDp = 28;
