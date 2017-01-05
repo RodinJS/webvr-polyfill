@@ -1250,7 +1250,7 @@ var kMiddleRadius = 0.75;
 var kInnerRadius = 0.3125;
 
 // Center line thickness in DP.
-var kCenterLineThicknessDp = 4;
+var kCenterLineThicknessDp = 2;
 
 // Button width in DP.
 var kButtonWidthDp = 28;
@@ -1357,9 +1357,9 @@ CardboardUI.prototype.onResize = function() {
 
     // Build centerline
     vertices.push(midline - lineWidth, buttonSize);
-    vertices.push(midline - lineWidth, gl.drawingBufferHeight);
+    vertices.push(midline - lineWidth, gl.drawingBufferHeight / 2.2);
     vertices.push(midline + lineWidth, buttonSize);
-    vertices.push(midline + lineWidth, gl.drawingBufferHeight);
+    vertices.push(midline + lineWidth, gl.drawingBufferHeight / 2.2);
 
     // Build gear
     self.gearOffset = (vertices.length / 2);
