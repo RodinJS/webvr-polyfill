@@ -61,7 +61,7 @@ var kInnerRadius = 0.3125;
 var kCenterLineThicknessDp = 2;
 
 // Button width in DP.
-var kButtonWidthDp = 24;
+var kButtonWidthDp = 24 ;
 
 // Factor to scale the touch area that responds to the touch.
 var kTouchSlopFactor = 1.5;
