@@ -4412,7 +4412,7 @@ function RotateInstructions() {
   s.right = 0;
   s.bottom = 0;
   s.left = 0;
-  s.backgroundColor = 'gray';
+  s.backgroundColor = '#000000';
   s.fontFamily = 'sans-serif';
   // Force this to be above the fullscreen canvas, which is at zIndex: 999999.
   s.zIndex = 1000000;
@@ -4437,7 +4437,7 @@ function RotateInstructions() {
 
   var snackbar = document.createElement('div');
   var s = snackbar.style;
-  s.backgroundColor = '#CFD8DC';
+  s.backgroundColor = '#1E1E20';
   s.position = 'fixed';
   s.bottom = 0;
   s.width = '100%';
@@ -4449,6 +4449,7 @@ function RotateInstructions() {
 
   var snackbarText = document.createElement('div');
   snackbarText.style.float = 'left';
+  snackbarText.style.color = '#33DEFF';
   snackbarText.innerHTML = 'No Cardboard viewer?';
 
   var snackbarButton = document.createElement('a');
@@ -4459,10 +4460,10 @@ function RotateInstructions() {
   s.float = 'right';
   s.fontWeight = 600;
   s.textTransform = 'uppercase';
-  s.borderLeft = '1px solid gray';
+  s.borderLeft = '1px solid #33DEFF';
   s.paddingLeft = '24px';
   s.textDecoration = 'none';
-  s.color = '#656A6B';
+  s.color = '#33DEFF';
 
   snackbar.appendChild(snackbarText);
   snackbar.appendChild(snackbarButton);
