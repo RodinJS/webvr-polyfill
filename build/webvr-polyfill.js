@@ -425,7 +425,8 @@ VRDisplay.prototype.getLayers = function() {
 };
 
 VRDisplay.prototype.fireVRDisplayPresentChange_ = function() {
-  var event = new CustomEvent('vrdisplaypresentchange', {detail: {display: this}, display: this});
+  var event = new CustomEvent('vrdisplaypresentchange', {detail: {display: this}});
+  event.display = this;
   window.dispatchEvent(event);
 };
 
@@ -1755,9 +1756,9 @@ CardboardVRDisplay.prototype.fireVRDisplayDeviceParamsChange_ = function () {
 		detail: {
 			vrdisplay: this,
 			deviceInfo: this.deviceInfo_,
-		},
-		display: this
+		}
 	});
+	event.display = this;
 	window.dispatchEvent(event);
 };
 
