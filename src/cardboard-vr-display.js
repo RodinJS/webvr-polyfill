@@ -275,9 +275,9 @@ CardboardVRDisplay.prototype.fireVRDisplayDeviceParamsChange_ = function () {
 		detail: {
 			vrdisplay: this,
 			deviceInfo: this.deviceInfo_,
-		},
-		display: this
+		}
 	});
+	event.display = this;
 	window.dispatchEvent(event);
 };
 
