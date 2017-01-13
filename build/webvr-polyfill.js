@@ -425,7 +425,8 @@ VRDisplay.prototype.getLayers = function() {
 };
 
 VRDisplay.prototype.fireVRDisplayPresentChange_ = function() {
-  var event = new CustomEvent('vrdisplaypresentchange', {detail: {display: this}, display: this});
+  var event = new CustomEvent('vrdisplaypresentchange', {detail: {display: this}});
+  event.display = this;
   window.dispatchEvent(event);
 };
 
@@ -1209,26 +1210,26 @@ var Util = _dereq_('./util.js');
 var WGLUPreserveGLState = _dereq_('./deps/wglu-preserve-state.js');
 
 var uiVS = [
-  'attribute vec2 position;',
+	'attribute vec2 position;',
 
-  'uniform mat4 projectionMat;',
+	'uniform mat4 projectionMat;',
 
-  'void main() {',
-  '  gl_Position = projectionMat * vec4( position, -1.0, 1.0 );',
-  '}',
+	'void main() {',
+	'  gl_Position = projectionMat * vec4( position, -1.0, 1.0 );',
+	'}',
 ].join('\n');
 
 var uiFS = [
-  'precision mediump float;',
+	'precision mediump float;',
 
-  'uniform vec4 color;',
+	'uniform vec4 color;',
 
-  'void main() {',
-  '  gl_FragColor = color;',
-  '}',
+	'void main() {',
+	'  gl_FragColor = color;',
+	'}',
 ].join('\n');
 
-var DEG2RAD = Math.PI/180.0;
+var DEG2RAD = Math.PI / 180.0;
 
 // The gear has 6 identical sections, each spanning 60 degrees.
 var kAnglePerGearSection = 60;
@@ -1253,15 +1254,15 @@ var kInnerRadius = 0.3125;
 var kCenterLineThicknessDp = 2;
 
 // Button width in DP.
-var kButtonWidthDp = 24 ;
+var kButtonWidthDp = 24;
 
 // Factor to scale the touch area that responds to the touch.
 var kTouchSlopFactor = 1.5;
 
 var Angles = [
-  0, kOuterRimEndAngle, kInnerRimBeginAngle,
-  kAnglePerGearSection - kInnerRimBeginAngle,
-  kAnglePerGearSection - kOuterRimEndAngle
+	0, kOuterRimEndAngle, kInnerRimBeginAngle,
+	kAnglePerGearSection - kInnerRimBeginAngle,
+	kAnglePerGearSection - kOuterRimEndAngle
 ];
 
 /**
@@ -1269,210 +1270,216 @@ var Angles = [
  * this is rendered into covers the entire screen (or close to it.)
  */
 function CardboardUI(gl) {
-  this.gl = gl;
+	this.gl = gl;
 
-  this.attribs = {
-    position: 0
-  };
-  this.program = Util.linkProgram(gl, uiVS, uiFS, this.attribs);
-  this.uniforms = Util.getProgramUniforms(gl, this.program);
+	this.attribs = {
+		position: 0
+	};
+	this.program = Util.linkProgram(gl, uiVS, uiFS, this.attribs);
+	this.uniforms = Util.getProgramUniforms(gl, this.program);
 
-  this.vertexBuffer = gl.createBuffer();
-  this.gearOffset = 0;
-  this.gearVertexCount = 0;
-  this.arrowOffset = 0;
-  this.arrowVertexCount = 0;
+	this.vertexBuffer = gl.createBuffer();
+	this.gearOffset = 0;
+	this.gearVertexCount = 0;
+	this.arrowOffset = 0;
+	this.arrowVertexCount = 0;
 
-  this.projMat = new Float32Array(16);
+	this.projMat = new Float32Array(16);
 
-  this.listener = null;
+	this.listener = null;
 
-  this.onResize();
+	this.onResize();
 };
 
 /**
  * Tears down all the resources created by the UI renderer.
  */
-CardboardUI.prototype.destroy = function() {
-  var gl = this.gl;
+CardboardUI.prototype.destroy = function () {
+	var gl = this.gl;
 
-  if (this.listener) {
-    gl.canvas.removeEventListener('click', this.listener, false);
-  }
+	if (this.listener) {
+		gl.canvas.removeEventListener('click', this.listener, false);
+	}
 
-  gl.deleteProgram(this.program);
-  gl.deleteBuffer(this.vertexBuffer);
+	gl.deleteProgram(this.program);
+	gl.deleteBuffer(this.vertexBuffer);
 };
 
 /**
  * Adds a listener to clicks on the gear and back icons
  */
-CardboardUI.prototype.listen = function(optionsCallback, backCallback) {
-  var canvas = this.gl.canvas;
-  this.listener = function(event) {
-    var midline = canvas.clientWidth / 2;
-    var buttonSize = kButtonWidthDp * kTouchSlopFactor;
-    // Check to see if the user clicked on (or around) the gear icon
-    if (event.clientX > midline - buttonSize &&
-        event.clientX < midline + buttonSize &&
-        event.clientY > canvas.clientHeight - buttonSize) {
-      optionsCallback(event);
-    }
-    // Check to see if the user clicked on (or around) the back icon
-    else if (event.clientX < buttonSize && event.clientY < buttonSize) {
-      backCallback(event);
-    }
-  };
-  canvas.addEventListener('click', this.listener, false);
+CardboardUI.prototype.listen = function (optionsCallback, backCallback) {
+	var canvas = this.gl.canvas;
+	this.listener = function (event) {
+		var midline = canvas.clientWidth / 2;
+		var buttonSize = kButtonWidthDp * kTouchSlopFactor;
+		// Check to see if the user clicked on (or around) the gear icon
+
+		if (event.clientX > midline - buttonSize &&
+			event.clientX < midline + buttonSize &&
+			event.clientY > canvas.clientHeight - buttonSize) {
+			optionsCallback(event);
+		}
+		// Check to see if the user clicked on (or around) the back icon
+
+		else
+		if (event.clientX > canvas.clientWidth - buttonSize && event.clientY < buttonSize) {
+			backCallback(event);
+		}
+	};
+	canvas.addEventListener('click', this.listener, false);
 };
 
 /**
  * Builds the UI mesh.
  */
-CardboardUI.prototype.onResize = function() {
-  var gl = this.gl;
-  var self = this;
+CardboardUI.prototype.onResize = function () {
+	var gl = this.gl;
+	var self = this;
 
-  var glState = [
-    gl.ARRAY_BUFFER_BINDING
-  ];
+	var glState = [
+		gl.ARRAY_BUFFER_BINDING
+	];
 
-  WGLUPreserveGLState(gl, glState, function(gl) {
-    var vertices = [];
+	WGLUPreserveGLState(gl, glState, function (gl) {
+		var vertices = [];
 
-    var midline = gl.drawingBufferWidth / 2;
+		var midline = gl.drawingBufferWidth / 2;
 
-    // Assumes your canvas width and height is scaled proportionately.
-    // TODO(smus): The following causes buttons to become huge on iOS, but seems
-    // like the right thing to do. For now, added a hack. But really, investigate why.
-    var dps = (gl.drawingBufferWidth / (screen.width * window.devicePixelRatio));
-    if (!Util.isIOS()) {
-      dps *= window.devicePixelRatio;
-    }
+		// Assumes your canvas width and height is scaled proportionately.
+		// TODO(smus): The following causes buttons to become huge on iOS, but seems
+		// like the right thing to do. For now, added a hack. But really, investigate why.
+		var dps = (gl.drawingBufferWidth / (screen.width * window.devicePixelRatio));
+		if (!Util.isIOS()) {
+			dps *= window.devicePixelRatio;
+		}
 
-    var lineWidth = kCenterLineThicknessDp * dps / 2;
-    var buttonSize = kButtonWidthDp * kTouchSlopFactor * dps;
-    var buttonScale = kButtonWidthDp * dps / 2;
-    var buttonBorder = ((kButtonWidthDp * kTouchSlopFactor) - kButtonWidthDp) * dps;
+		var lineWidth = kCenterLineThicknessDp * dps / 2;
+		var buttonSize = kButtonWidthDp * kTouchSlopFactor * dps;
+		var buttonScale = kButtonWidthDp * dps / 2;
+		var buttonBorder = ((kButtonWidthDp * kTouchSlopFactor) - kButtonWidthDp) * dps;
 
-    // Build centerline
-    vertices.push(midline - lineWidth, buttonSize);
-    vertices.push(midline - lineWidth, gl.drawingBufferHeight / 2.2);
-    vertices.push(midline + lineWidth, buttonSize);
-    vertices.push(midline + lineWidth, gl.drawingBufferHeight / 2.2);
+		// Build centerline
+		vertices.push(midline - lineWidth, buttonSize);
+		vertices.push(midline - lineWidth, gl.drawingBufferHeight / 2.2);
+		vertices.push(midline + lineWidth, buttonSize);
+		vertices.push(midline + lineWidth, gl.drawingBufferHeight / 2.2);
 
-    // Build gear
-    self.gearOffset = (vertices.length / 2);
+		// Build gear
+		self.gearOffset = (vertices.length / 2);
 
-    function addGearSegment(theta, r) {
-      var angle = (90 - theta) * DEG2RAD;
-      var x = Math.cos(angle);
-      var y = Math.sin(angle);
-      vertices.push(kInnerRadius * x * buttonScale + midline, kInnerRadius * y * buttonScale + buttonScale);
-      vertices.push(r * x * buttonScale + midline, r * y * buttonScale + buttonScale);
-    }
+		function addGearSegment(theta, r) {
+			var angle = (90 - theta) * DEG2RAD;
+			var x = Math.cos(angle);
+			var y = Math.sin(angle);
+			vertices.push(kInnerRadius * x * buttonScale + midline, kInnerRadius * y * buttonScale + buttonScale);
+			vertices.push(r * x * buttonScale + midline, r * y * buttonScale + buttonScale);
+		}
 
-    for (var i = 0; i <= 6; i++) {
-      var segmentTheta = i * kAnglePerGearSection;
+		for (var i = 0; i <= 6; i++) {
+			var segmentTheta = i * kAnglePerGearSection;
 
-      addGearSegment(segmentTheta, kOuterRadius);
-      addGearSegment(segmentTheta + kOuterRimEndAngle, kOuterRadius);
-      addGearSegment(segmentTheta + kInnerRimBeginAngle, kMiddleRadius);
-      addGearSegment(segmentTheta + (kAnglePerGearSection - kInnerRimBeginAngle), kMiddleRadius);
-      addGearSegment(segmentTheta + (kAnglePerGearSection - kOuterRimEndAngle), kOuterRadius);
-    }
+			addGearSegment(segmentTheta, kOuterRadius);
+			addGearSegment(segmentTheta + kOuterRimEndAngle, kOuterRadius);
+			addGearSegment(segmentTheta + kInnerRimBeginAngle, kMiddleRadius);
+			addGearSegment(segmentTheta + (kAnglePerGearSection - kInnerRimBeginAngle), kMiddleRadius);
+			addGearSegment(segmentTheta + (kAnglePerGearSection - kOuterRimEndAngle), kOuterRadius);
+		}
 
-    self.gearVertexCount = (vertices.length / 2) - self.gearOffset;
+		self.gearVertexCount = (vertices.length / 2) - self.gearOffset;
 
-    // Build back arrow
-    self.arrowOffset = (vertices.length / 2);
+		// Build close button
+		self.arrowOffset = (vertices.length / 2);
 
-    function addArrowVertex(x, y) {
-      vertices.push(buttonBorder + x, gl.drawingBufferHeight - buttonBorder - y);
-    }
+		var angledLineWidth = lineWidth / Math.sin(45 * DEG2RAD);
+		var A = buttonScale / Math.sin(Math.PI / 4) / 1.5;
+		var D = lineWidth * 2;
 
-    var angledLineWidth = lineWidth / Math.sin(45 * DEG2RAD);
+		function addCloseButtonVertex(x, y) {
+			//vertices.push(buttonBorder + x, buttonBorder + y);
+			var X = Math.cos(Math.PI / 4) * x - Math.sin(Math.PI / 4) * y;
+			var Y = Math.sin(Math.PI / 4) * x + Math.cos(Math.PI / 4) * y;
+			vertices.push(gl.drawingBufferWidth - buttonBorder * 2 - X, gl.drawingBufferHeight - buttonBorder * 2 - Y);
+		}
 
-    addArrowVertex(0, buttonScale);
-    addArrowVertex(buttonScale, 0);
-    addArrowVertex(buttonScale + angledLineWidth, angledLineWidth);
-    addArrowVertex(angledLineWidth, buttonScale + angledLineWidth);
+		function drawRectangle(x, y, w, h) {
+			addCloseButtonVertex(x, y);
+			addCloseButtonVertex(x + w, y);
+			addCloseButtonVertex(x + w, y + h);
+			addCloseButtonVertex(x, y + h);
+			addCloseButtonVertex(x, y);
+		}
 
-    addArrowVertex(angledLineWidth, buttonScale - angledLineWidth);
-    addArrowVertex(0, buttonScale);
-    addArrowVertex(buttonScale, buttonScale * 2);
-    addArrowVertex(buttonScale + angledLineWidth, (buttonScale * 2) - angledLineWidth);
 
-    addArrowVertex(angledLineWidth, buttonScale - angledLineWidth);
-    addArrowVertex(0, buttonScale);
+		drawRectangle(-A, -D / 2, 2 * A, D);
+		drawRectangle(-D / 2, -A, D, 2 * A);
 
-    addArrowVertex(angledLineWidth, buttonScale - lineWidth);
-    addArrowVertex(kButtonWidthDp * dps, buttonScale - lineWidth);
-    addArrowVertex(angledLineWidth, buttonScale + lineWidth);
-    addArrowVertex(kButtonWidthDp * dps, buttonScale + lineWidth);
+		self.arrowVertexCount = 5;
 
-    self.arrowVertexCount = (vertices.length / 2) - self.arrowOffset;
-
-    // Buffer data
-    gl.bindBuffer(gl.ARRAY_BUFFER, self.vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-  });
+		// Buffer data
+		gl.bindBuffer(gl.ARRAY_BUFFER, self.vertexBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+	});
 };
 
 /**
  * Performs distortion pass on the injected backbuffer, rendering it to the real
  * backbuffer.
  */
-CardboardUI.prototype.render = function() {
-  var gl = this.gl;
-  var self = this;
+CardboardUI.prototype.render = function () {
+	var gl = this.gl;
+	var self = this;
 
-  var glState = [
-    gl.CULL_FACE,
-    gl.DEPTH_TEST,
-    gl.BLEND,
-    gl.SCISSOR_TEST,
-    gl.STENCIL_TEST,
-    gl.COLOR_WRITEMASK,
-    gl.VIEWPORT,
+	var glState = [
+		gl.CULL_FACE,
+		gl.DEPTH_TEST,
+		gl.BLEND,
+		gl.SCISSOR_TEST,
+		gl.STENCIL_TEST,
+		gl.COLOR_WRITEMASK,
+		gl.VIEWPORT,
 
-    gl.CURRENT_PROGRAM,
-    gl.ARRAY_BUFFER_BINDING
-  ];
+		gl.CURRENT_PROGRAM,
+		gl.ARRAY_BUFFER_BINDING
+	];
 
-  WGLUPreserveGLState(gl, glState, function(gl) {
-    // Make sure the GL state is in a good place
-    gl.disable(gl.CULL_FACE);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.disable(gl.SCISSOR_TEST);
-    gl.disable(gl.STENCIL_TEST);
-    gl.colorMask(true, true, true, true);
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+	WGLUPreserveGLState(gl, glState, function (gl) {
+		// Make sure the GL state is in a good place
+		gl.disable(gl.CULL_FACE);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.BLEND);
+		gl.disable(gl.SCISSOR_TEST);
+		gl.disable(gl.STENCIL_TEST);
+		gl.colorMask(true, true, true, true);
+		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-    self.renderNoState();
-  });
+		self.renderNoState();
+	});
 };
 
-CardboardUI.prototype.renderNoState = function() {
-  var gl = this.gl;
+CardboardUI.prototype.renderNoState = function () {
+	var gl = this.gl;
 
-  // Bind distortion program and mesh
-  gl.useProgram(this.program);
+	// Bind distortion program and mesh
+	gl.useProgram(this.program);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-  gl.enableVertexAttribArray(this.attribs.position);
-  gl.vertexAttribPointer(this.attribs.position, 2, gl.FLOAT, false, 8, 0);
+	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+	gl.enableVertexAttribArray(this.attribs.position);
+	gl.vertexAttribPointer(this.attribs.position, 2, gl.FLOAT, false, 8, 0);
 
-  gl.uniform4f(this.uniforms.color, 1.0, 1.0, 1.0, 1.0);
+	gl.uniform4f(this.uniforms.color, 1.0, 1.0, 1.0, 1.0);
 
-  Util.orthoMatrix(this.projMat, 0, gl.drawingBufferWidth, 0, gl.drawingBufferHeight, 0.1, 1024.0);
-  gl.uniformMatrix4fv(this.uniforms.projectionMat, false, this.projMat);
+	Util.orthoMatrix(this.projMat, 0, gl.drawingBufferWidth, 0, gl.drawingBufferHeight, 0.1, 1024.0);
+	gl.uniformMatrix4fv(this.uniforms.projectionMat, false, this.projMat);
 
-  // Draws UI element
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  gl.drawArrays(gl.TRIANGLE_STRIP, this.gearOffset, this.gearVertexCount);
-  gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, this.arrowVertexCount);
+	// Draws UI element
+	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+	gl.drawArrays(gl.TRIANGLE_STRIP, this.gearOffset, this.gearVertexCount);
+	//gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, this.arrowVertexCount);
+	//drawing a close (X) button from two rectangles
+	gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, 5);
+	gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset + 5, 5);
+
 };
 
 module.exports = CardboardUI;
@@ -1725,7 +1732,9 @@ CardboardVRDisplay.prototype.onResize_ = function (e) {
 		// Added padding on right and bottom because iPhone 5 will not
 		// hide the URL bar unless content is bigger than the screen.
 		// This will not be visible as long as the container element (e.g. body)
-		// is set to 'overflow: hidden'.
+		// is set to '
+		//
+		// '.
 		if (Util.isIOS)
 			cssProperties.push('padding: 0 10px 10px 0');
 		else
@@ -1755,9 +1764,9 @@ CardboardVRDisplay.prototype.fireVRDisplayDeviceParamsChange_ = function () {
 		detail: {
 			vrdisplay: this,
 			deviceInfo: this.deviceInfo_,
-		},
-		display: this
+		}
 	});
+	event.display = this;
 	window.dispatchEvent(event);
 };
 
