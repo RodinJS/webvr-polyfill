@@ -46,13 +46,14 @@ function FusionPoseSensor() {
 
 	var iframes = [];
 	if (Util.isIOS()) {
+		iframes = document.getElementsByTagName('iframe');
 		setInterval(function () {
 			iframes = document.getElementsByTagName('iframe');
 		}, 1500);
 	}
 
 	function dispatchWindowEventAsMessage(name, event) {
-		console.log(event);
+		//console.log(event);
 		var Event;
 		switch (event.type) {
 			case 'orientationchange':
@@ -88,7 +89,7 @@ function FusionPoseSensor() {
 		}
 
 		for (var i = 0; i < iframes.length; i++)
-			iframes[i].postMessage({name: name, event: Event}, '*');
+			iframes[i].contentWindow.postMessage({name: name, event: Event}, '*');
 		window.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
 	}
 
