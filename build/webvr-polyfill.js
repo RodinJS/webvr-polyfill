@@ -4778,28 +4778,41 @@ function FusionPoseSensor() {
 	}
 
 	function dispatchWindowEventAsMessage(name, event) {
-		var Event = {
-			acceleration: {
-				x: event.acceleration.x,
-				y: event.acceleration.y,
-				z: event.acceleration.z
-			},
-			accelerationIncludingGravity: {
-				x: event.accelerationIncludingGravity.x,
-				y: event.accelerationIncludingGravity.y,
-				z: event.accelerationIncludingGravity.z
-			},
-			eventPhase: event.eventPhase,
-			interval: event.interval,
-			returnValue: event.returnValue,
-			rotationRate: {
-				alpha: event.rotationRate.alpha,
-				beta: event.rotationRate.beta,
-				gamma: event.rotationRate.gamma
-			},
-			timeStamp: event.timeStamp,
-			type: event.type
-		};
+		console.log(event);
+		var Event;
+		switch (event.type) {
+			case 'orientationchange':
+				Event = {
+					timeStamp: event.timeStamp,
+					type: event.type
+				};
+				break;
+			case 'devicemotion':
+				Event = {
+					acceleration: {
+						x: event.acceleration.x,
+						y: event.acceleration.y,
+						z: event.acceleration.z
+					},
+					accelerationIncludingGravity: {
+						x: event.accelerationIncludingGravity.x,
+						y: event.accelerationIncludingGravity.y,
+						z: event.accelerationIncludingGravity.z
+					},
+					eventPhase: event.eventPhase,
+					interval: event.interval,
+					returnValue: event.returnValue,
+					rotationRate: {
+						alpha: event.rotationRate.alpha,
+						beta: event.rotationRate.beta,
+						gamma: event.rotationRate.gamma
+					},
+					timeStamp: event.timeStamp,
+					type: event.type
+				};
+				break;
+		}
+
 		for (var i = 0; i < iframes.length; i++)
 			iframes[i].postMessage({name: name, event: Event}, '*');
 		window.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
@@ -4813,7 +4826,7 @@ function FusionPoseSensor() {
 	});
 
 	window.addEventListener('orientationchange', function (e) {
-		if (Util.isIOS())
+		if (Util.isIOS() || true)
 			dispatchWindowEventAsMessage('orientationchange', e);
 		else
 			ScreenOrientationChange(e)
