@@ -32,6 +32,8 @@ function FusionPoseSensor() {
 	var ScreenOrientationChange = this.onScreenOrientationChange_.bind(this);
 
 	window.addEventListener('message', function (e) {
+		if (!e.data.type || e.data.type != 'iframeEvent')
+			return;
 		switch (e.data.name) {
 			case 'devicemotion':
 				DeviceMotionChange(e.data.event);
@@ -74,7 +76,7 @@ function FusionPoseSensor() {
 		};
 		for (var i = 0; i < iframes.length; i++)
 			iframes[i].postMessage({name: name, event: Event}, '*');
-		window.postMessage({name: name, event: Event}, '*');
+		window.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
 	}
 
 	window.addEventListener('devicemotion', function (e) {

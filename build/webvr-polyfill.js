@@ -1655,7 +1655,15 @@ CardboardVRDisplay.prototype.beginPresent_ = function () {
 
 	// Listen for orientation change events in order to show interstitial.
 	this.orientationHandler = this.onOrientationChange_.bind(this);
+
 	window.addEventListener('orientationchange', this.orientationHandler);
+
+	window.addEventListener('message', function (e) {
+		if (!e.data.type || e.data.type != 'iframeEvent')
+			return;
+		if (e.data.name == orientationchange)
+			this.orientationHandler();
+	});
 
 	// Listen for present display change events in order to update distorter dimensions
 	this.vrdisplaypresentchangeHandler = this.updateBounds_.bind(this);
@@ -4750,6 +4758,8 @@ function FusionPoseSensor() {
 	var ScreenOrientationChange = this.onScreenOrientationChange_.bind(this);
 
 	window.addEventListener('message', function (e) {
+		if (!e.data.type || e.data.type != 'iframeEvent')
+			return;
 		switch (e.data.name) {
 			case 'devicemotion':
 				DeviceMotionChange(e.data.event);
@@ -4792,7 +4802,7 @@ function FusionPoseSensor() {
 		};
 		for (var i = 0; i < iframes.length; i++)
 			iframes[i].postMessage({name: name, event: Event}, '*');
-		window.postMessage({name: name, event: Event}, '*');
+		window.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
 	}
 
 	window.addEventListener('devicemotion', function (e) {
