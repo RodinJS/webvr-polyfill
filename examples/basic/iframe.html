@@ -5,8 +5,56 @@
     <title>Title</title>
 </head>
 <body>
-    <iframe src="index.html">
+    <iframe src="http://192.168.0.206:8000/examples/basic/index.html">
 
     </iframe>
+
+    <script type="text/javascript">
+
+	function dispatchWindowEventAsMessage(name, event) {
+		console.log(event);
+		var Event;
+		switch (event.type) {
+			case 'orientationchange':
+				Event = {
+					timeStamp: event.timeStamp,
+					type: event.type
+				};
+				break;
+			case 'devicemotion':
+				Event = {
+					acceleration: {
+						x: event.acceleration.x,
+						y: event.acceleration.y,
+						z: event.acceleration.z
+					},
+					accelerationIncludingGravity: {
+						x: event.accelerationIncludingGravity.x,
+						y: event.accelerationIncludingGravity.y,
+						z: event.accelerationIncludingGravity.z
+					},
+					eventPhase: event.eventPhase,
+					interval: event.interval,
+					returnValue: event.returnValue,
+					rotationRate: {
+						alpha: event.rotationRate.alpha,
+						beta: event.rotationRate.beta,
+						gamma: event.rotationRate.gamma
+					},
+					timeStamp: event.timeStamp,
+					type: event.type
+				};
+				break;
+		}
+
+		var iframes = document.getElementsByTagName('iframe');
+		for (var i = 0; i < iframes.length; i++)
+			iframes[i].contentWindow.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
+	}
+
+	window.addEventListener('devicemotion', function (e) {
+			dispatchWindowEventAsMessage('devicemotion', e);
+	});
+    </script>
 </body>
 </html>
