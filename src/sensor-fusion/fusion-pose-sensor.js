@@ -53,7 +53,7 @@ function FusionPoseSensor() {
 	}
 
 	function dispatchWindowEventAsMessage(name, event) {
-		console.log(event);
+		//console.log(event);
 		var Event;
 		switch (event.type) {
 			case 'orientationchange':
