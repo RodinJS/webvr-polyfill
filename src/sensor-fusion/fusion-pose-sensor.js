@@ -18,6 +18,12 @@ var TouchPanner = require('../touch-panner.js');
 var MathUtil = require('../math-util.js');
 var Util = require('../util.js');
 
+window.registerIframeWindowFix = function () {
+
+};
+window.registerIframeWindowFix();
+
+module.exports.registerIframeWindowFix = window.registerIframeWindowFix;
 /**
  * The pose sensor, implemented using DeviceMotion APIs.
  */
@@ -31,82 +37,21 @@ function FusionPoseSensor() {
 	var DeviceMotionChange = this.onDeviceMotionChange_.bind(this);
 	var ScreenOrientationChange = this.onScreenOrientationChange_.bind(this);
 
-	window.addEventListener('message', function (e) {
-		if (!e.data.type || e.data.type != 'iframeEvent')
-			return;
-		switch (e.data.name) {
-			case 'devicemotion':
-				DeviceMotionChange(e.data.event);
-				break;
-			case 'orientationchange':
-				ScreenOrientationChange(e.data.event);
-				break;
-		}
-	});
-
-	var iframes = [];
-	if (Util.isIOS()) {
-		iframes = document.getElementsByTagName('iframe');
-		setInterval(function () {
-			iframes = document.getElementsByTagName('iframe');
-		}, 1500);
-	}
-
-	function dispatchWindowEventAsMessage(name, event) {
-		//console.log(event);
-		var Event;
-		switch (event.type) {
-			case 'orientationchange':
-				Event = {
-					timeStamp: event.timeStamp,
-					type: event.type
-				};
-				break;
-			case 'devicemotion':
-				Event = {
-					acceleration: {
-						x: event.acceleration.x,
-						y: event.acceleration.y,
-						z: event.acceleration.z
-					},
-					accelerationIncludingGravity: {
-						x: event.accelerationIncludingGravity.x,
-						y: event.accelerationIncludingGravity.y,
-						z: event.accelerationIncludingGravity.z
-					},
-					eventPhase: event.eventPhase,
-					interval: event.interval,
-					returnValue: event.returnValue,
-					rotationRate: {
-						alpha: event.rotationRate.alpha,
-						beta: event.rotationRate.beta,
-						gamma: event.rotationRate.gamma
-					},
-					timeStamp: event.timeStamp,
-					type: event.type
-				};
-				break;
-		}
-
-		for (var i = 0; i < iframes.length; i++)
-			iframes[i].contentWindow.postMessage({name: name, event: Event}, '*');
-		window.postMessage({type: 'iframeEvent', name: name, event: Event}, '*');
-	}
 
 	window.addEventListener('devicemotion', function (e) {
-		if (Util.isIOS())
-			dispatchWindowEventAsMessage('devicemotion', e);
-		else
-			DeviceMotionChange(e);
+		//if (Util.isIOS() && window.parent == window)
+		//	dispatchWindowEventAsMessage('devicemotion', e);
+		DeviceMotionChange(e);
 	});
 
 	window.addEventListener('orientationchange', function (e) {
-		if (Util.isIOS() || true)
-			dispatchWindowEventAsMessage('orientationchange', e);
-		else
-			ScreenOrientationChange(e)
+		//if (Util.isIOS() && window.parent == window)
+		//	dispatchWindowEventAsMessage('orientationchange', e);
+		ScreenOrientationChange(e)
 	});
 
+
+	//registerIframeWindowFix();
 
 	//window.addEventListener('devicemotion', this.onDeviceMotionChange_.bind(this));
 	//window.addEventListener('orientationchange', this.onScreenOrientationChange_.bind(this));

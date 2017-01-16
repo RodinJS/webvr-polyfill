@@ -26,193 +26,198 @@ var VRDisplayHMDDevice = require('./display-wrappers.js').VRDisplayHMDDevice;
 var VRDisplayPositionSensorDevice = require('./display-wrappers.js').VRDisplayPositionSensorDevice;
 
 function WebVRPolyfill() {
-  this.displays = [];
-  this.devices = []; // For deprecated objects
-  this.devicesPopulated = false;
-  this.nativeWebVRAvailable = this.isWebVRAvailable();
-  this.nativeLegacyWebVRAvailable = this.isDeprecatedWebVRAvailable();
+	this.displays = [];
+	this.devices = []; // For deprecated objects
+	this.devicesPopulated = false;
+	this.nativeWebVRAvailable = this.isWebVRAvailable();
+	this.nativeLegacyWebVRAvailable = this.isDeprecatedWebVRAvailable();
 
-  if (!this.nativeLegacyWebVRAvailable) {
-    if (!this.nativeWebVRAvailable) {
-      this.enablePolyfill();
-    }
-    if (WebVRConfig.ENABLE_DEPRECATED_API) {
-      this.enableDeprecatedPolyfill();
-    }
-  }
+	if (!this.nativeLegacyWebVRAvailable) {
+		if (!this.nativeWebVRAvailable) {
+			this.enablePolyfill();
+		}
+		if (WebVRConfig.ENABLE_DEPRECATED_API) {
+			this.enableDeprecatedPolyfill();
+		}
+	}
 
-  // Put a shim in place to update the API to 1.1 if needed.
-  InstallWebVRSpecShim();
+	if (Util.isIOS()) {
+		var initialContent = window.document.querySelector('meta[name=viewport]').getAttribute('content');
+		window.document.querySelector('meta[name=viewport]').setAttribute('content', initialContent + ', shrink-to-fit=no');
+	}
+
+	// Put a shim in place to update the API to 1.1 if needed.
+	InstallWebVRSpecShim();
 }
 
-WebVRPolyfill.prototype.isWebVRAvailable = function() {
-  return ('getVRDisplays' in navigator);
+WebVRPolyfill.prototype.isWebVRAvailable = function () {
+	return ('getVRDisplays' in navigator);
 };
 
-WebVRPolyfill.prototype.isDeprecatedWebVRAvailable = function() {
-  return ('getVRDevices' in navigator) || ('mozGetVRDevices' in navigator);
+WebVRPolyfill.prototype.isDeprecatedWebVRAvailable = function () {
+	return ('getVRDevices' in navigator) || ('mozGetVRDevices' in navigator);
 };
 
-WebVRPolyfill.prototype.populateDevices = function() {
-  if (this.devicesPopulated) {
-    return;
-  }
+WebVRPolyfill.prototype.populateDevices = function () {
+	if (this.devicesPopulated) {
+		return;
+	}
 
-  // Initialize our virtual VR devices.
-  var vrDisplay = null;
+	// Initialize our virtual VR devices.
+	var vrDisplay = null;
 
-  // Add a Cardboard VRDisplay on compatible mobile devices
-  if (this.isCardboardCompatible()) {
-    vrDisplay = new CardboardVRDisplay();
-    this.displays.push(vrDisplay);
+	// Add a Cardboard VRDisplay on compatible mobile devices
+	if (this.isCardboardCompatible()) {
+		vrDisplay = new CardboardVRDisplay();
+		this.displays.push(vrDisplay);
 
-    // For backwards compatibility
-    if (WebVRConfig.ENABLE_DEPRECATED_API) {
-      this.devices.push(new VRDisplayHMDDevice(vrDisplay));
-      this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
-    }
-  }
+		// For backwards compatibility
+		if (WebVRConfig.ENABLE_DEPRECATED_API) {
+			this.devices.push(new VRDisplayHMDDevice(vrDisplay));
+			this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
+		}
+	}
 
-  // Add a Mouse and Keyboard driven VRDisplay for desktops/laptops
-  if (!this.isMobile() && !WebVRConfig.MOUSE_KEYBOARD_CONTROLS_DISABLED) {
-    vrDisplay = new MouseKeyboardVRDisplay();
-    this.displays.push(vrDisplay);
+	// Add a Mouse and Keyboard driven VRDisplay for desktops/laptops
+	if (!this.isMobile() && !WebVRConfig.MOUSE_KEYBOARD_CONTROLS_DISABLED) {
+		vrDisplay = new MouseKeyboardVRDisplay();
+		this.displays.push(vrDisplay);
 
-    // For backwards compatibility
-    if (WebVRConfig.ENABLE_DEPRECATED_API) {
-      this.devices.push(new VRDisplayHMDDevice(vrDisplay));
-      this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
-    }
-  }
+		// For backwards compatibility
+		if (WebVRConfig.ENABLE_DEPRECATED_API) {
+			this.devices.push(new VRDisplayHMDDevice(vrDisplay));
+			this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
+		}
+	}
 
-  // Uncomment to add positional tracking via webcam.
-  //if (!this.isMobile() && WebVRConfig.ENABLE_DEPRECATED_API) {
-  //  positionDevice = new WebcamPositionSensorVRDevice();
-  //  this.devices.push(positionDevice);
-  //}
+	// Uncomment to add positional tracking via webcam.
+	//if (!this.isMobile() && WebVRConfig.ENABLE_DEPRECATED_API) {
+	//  positionDevice = new WebcamPositionSensorVRDevice();
+	//  this.devices.push(positionDevice);
+	//}
 
-  this.devicesPopulated = true;
+	this.devicesPopulated = true;
 };
 
-WebVRPolyfill.prototype.enablePolyfill = function() {
-  // Provide navigator.getVRDisplays.
-  navigator.getVRDisplays = this.getVRDisplays.bind(this);
+WebVRPolyfill.prototype.enablePolyfill = function () {
+	// Provide navigator.getVRDisplays.
+	navigator.getVRDisplays = this.getVRDisplays.bind(this);
 
-  // Provide the VRDisplay object.
-  window.VRDisplay = VRDisplay;
+	// Provide the VRDisplay object.
+	window.VRDisplay = VRDisplay;
 
-  // Provide navigator.vrEnabled.
-  var self = this;
-  Object.defineProperty(navigator, 'vrEnabled', {
-    get: function () {
-      return self.isCardboardCompatible() &&
-        (document.fullscreenEnabled ||
-          document.mozFullScreenEnabled ||
-          document.webkitFullscreenEnabled ||
-          false);
-    }
-  });
+	// Provide navigator.vrEnabled.
+	var self = this;
+	Object.defineProperty(navigator, 'vrEnabled', {
+		get: function () {
+			return self.isCardboardCompatible() &&
+				(document.fullscreenEnabled ||
+				document.mozFullScreenEnabled ||
+				document.webkitFullscreenEnabled ||
+				false);
+		}
+	});
 
-  // Provide the VRFrameData object.
-  window.VRFrameData = VRFrameData;
+	// Provide the VRFrameData object.
+	window.VRFrameData = VRFrameData;
 };
 
-WebVRPolyfill.prototype.enableDeprecatedPolyfill = function() {
-  // Provide navigator.getVRDevices.
-  navigator.getVRDevices = this.getVRDevices.bind(this);
+WebVRPolyfill.prototype.enableDeprecatedPolyfill = function () {
+	// Provide navigator.getVRDevices.
+	navigator.getVRDevices = this.getVRDevices.bind(this);
 
-  // Provide the CardboardHMDVRDevice and PositionSensorVRDevice objects.
-  window.HMDVRDevice = HMDVRDevice;
-  window.PositionSensorVRDevice = PositionSensorVRDevice;
+	// Provide the CardboardHMDVRDevice and PositionSensorVRDevice objects.
+	window.HMDVRDevice = HMDVRDevice;
+	window.PositionSensorVRDevice = PositionSensorVRDevice;
 };
 
-WebVRPolyfill.prototype.getVRDisplays = function() {
-  this.populateDevices();
-  var displays = this.displays;
-  return new Promise(function(resolve, reject) {
-    try {
-      resolve(displays);
-    } catch (e) {
-      reject(e);
-    }
-  });
+WebVRPolyfill.prototype.getVRDisplays = function () {
+	this.populateDevices();
+	var displays = this.displays;
+	return new Promise(function (resolve, reject) {
+		try {
+			resolve(displays);
+		} catch (e) {
+			reject(e);
+		}
+	});
 };
 
-WebVRPolyfill.prototype.getVRDevices = function() {
-  console.warn('getVRDevices is deprecated. Please update your code to use getVRDisplays instead.');
-  var self = this;
-  return new Promise(function(resolve, reject) {
-    try {
-      if (!self.devicesPopulated) {
-        if (self.nativeWebVRAvailable) {
-          return navigator.getVRDisplays(function(displays) {
-            for (var i = 0; i < displays.length; ++i) {
-              self.devices.push(new VRDisplayHMDDevice(displays[i]));
-              self.devices.push(new VRDisplayPositionSensorDevice(displays[i]));
-            }
-            self.devicesPopulated = true;
-            resolve(self.devices);
-          }, reject);
-        }
+WebVRPolyfill.prototype.getVRDevices = function () {
+	console.warn('getVRDevices is deprecated. Please update your code to use getVRDisplays instead.');
+	var self = this;
+	return new Promise(function (resolve, reject) {
+		try {
+			if (!self.devicesPopulated) {
+				if (self.nativeWebVRAvailable) {
+					return navigator.getVRDisplays(function (displays) {
+						for (var i = 0; i < displays.length; ++i) {
+							self.devices.push(new VRDisplayHMDDevice(displays[i]));
+							self.devices.push(new VRDisplayPositionSensorDevice(displays[i]));
+						}
+						self.devicesPopulated = true;
+						resolve(self.devices);
+					}, reject);
+				}
 
-        if (self.nativeLegacyWebVRAvailable) {
-          return (navigator.getVRDDevices || navigator.mozGetVRDevices)(function(devices) {
-            for (var i = 0; i < devices.length; ++i) {
-              if (devices[i] instanceof HMDVRDevice) {
-                self.devices.push(devices[i]);
-              }
-              if (devices[i] instanceof PositionSensorVRDevice) {
-                self.devices.push(devices[i]);
-              }
-            }
-            self.devicesPopulated = true;
-            resolve(self.devices);
-          }, reject);
-        }
-      }
+				if (self.nativeLegacyWebVRAvailable) {
+					return (navigator.getVRDDevices || navigator.mozGetVRDevices)(function (devices) {
+						for (var i = 0; i < devices.length; ++i) {
+							if (devices[i] instanceof HMDVRDevice) {
+								self.devices.push(devices[i]);
+							}
+							if (devices[i] instanceof PositionSensorVRDevice) {
+								self.devices.push(devices[i]);
+							}
+						}
+						self.devicesPopulated = true;
+						resolve(self.devices);
+					}, reject);
+				}
+			}
 
-      self.populateDevices();
-      resolve(self.devices);
-    } catch (e) {
-      reject(e);
-    }
-  });
+			self.populateDevices();
+			resolve(self.devices);
+		} catch (e) {
+			reject(e);
+		}
+	});
 };
 
 /**
  * Determine if a device is mobile.
  */
-WebVRPolyfill.prototype.isMobile = function() {
-  return /Android/i.test(navigator.userAgent) ||
-      /iPhone|iPad|iPod/i.test(navigator.userAgent);
+WebVRPolyfill.prototype.isMobile = function () {
+	return /Android/i.test(navigator.userAgent) ||
+		/iPhone|iPad|iPod/i.test(navigator.userAgent);
 };
 
-WebVRPolyfill.prototype.isCardboardCompatible = function() {
-  // For now, support all iOS and Android devices.
-  // Also enable the WebVRConfig.FORCE_VR flag for debugging.
-  return this.isMobile() || WebVRConfig.FORCE_ENABLE_VR;
+WebVRPolyfill.prototype.isCardboardCompatible = function () {
+	// For now, support all iOS and Android devices.
+	// Also enable the WebVRConfig.FORCE_VR flag for debugging.
+	return this.isMobile() || WebVRConfig.FORCE_ENABLE_VR;
 };
 
 // Installs a shim that updates a WebVR 1.0 spec implementation to WebVR 1.1
 function InstallWebVRSpecShim() {
-  if ('VRDisplay' in window && !('VRFrameData' in window)) {
-    // Provide the VRFrameData object.
-    window.VRFrameData = VRFrameData;
+	if ('VRDisplay' in window && !('VRFrameData' in window)) {
+		// Provide the VRFrameData object.
+		window.VRFrameData = VRFrameData;
 
-    // A lot of Chrome builds don't have depthNear and depthFar, even
-    // though they're in the WebVR 1.0 spec. Patch them in if they're not present.
-    if(!('depthNear' in window.VRDisplay.prototype)) {
-      window.VRDisplay.prototype.depthNear = 0.01;
-    }
+		// A lot of Chrome builds don't have depthNear and depthFar, even
+		// though they're in the WebVR 1.0 spec. Patch them in if they're not present.
+		if (!('depthNear' in window.VRDisplay.prototype)) {
+			window.VRDisplay.prototype.depthNear = 0.01;
+		}
 
-    if(!('depthFar' in window.VRDisplay.prototype)) {
-      window.VRDisplay.prototype.depthFar = 10000.0;
-    }
+		if (!('depthFar' in window.VRDisplay.prototype)) {
+			window.VRDisplay.prototype.depthFar = 10000.0;
+		}
 
-    window.VRDisplay.prototype.getFrameData = function(frameData) {
-      return Util.frameDataFromPose(frameData, this.getPose(), this);
-    }
-  }
+		window.VRDisplay.prototype.getFrameData = function (frameData) {
+			return Util.frameDataFromPose(frameData, this.getPose(), this);
+		}
+	}
 };
 
 module.exports.WebVRPolyfill = WebVRPolyfill;
