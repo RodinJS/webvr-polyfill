@@ -1,6 +1,13 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+/*
+object-assign
+(c) Sindre Sorhus
+@license MIT
+*/
+
 'use strict';
 /* eslint-disable no-unused-vars */
+var getOwnPropertySymbols = Object.getOwnPropertySymbols;
 var hasOwnProperty = Object.prototype.hasOwnProperty;
 var propIsEnumerable = Object.prototype.propertyIsEnumerable;
 
@@ -21,7 +28,7 @@ function shouldUseNative() {
 		// Detect buggy property enumeration order in older V8 versions.
 
 		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line
+		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
 		test1[5] = 'de';
 		if (Object.getOwnPropertyNames(test1)[0] === '5') {
 			return false;
@@ -50,7 +57,7 @@ function shouldUseNative() {
 		}
 
 		return true;
-	} catch (e) {
+	} catch (err) {
 		// We don't expect any of the above to throw, but better to be safe.
 		return false;
 	}
@@ -70,8 +77,8 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 			}
 		}
 
-		if (Object.getOwnPropertySymbols) {
-			symbols = Object.getOwnPropertySymbols(from);
+		if (getOwnPropertySymbols) {
+			symbols = getOwnPropertySymbols(from);
 			for (var i = 0; i < symbols.length; i++) {
 				if (propIsEnumerable.call(from, symbols[i])) {
 					to[symbols[i]] = from[symbols[i]];
@@ -1548,6 +1555,8 @@ function CardboardVRDisplay() {
 		// Listen for resize events to workaround this awful Safari bug.
 		window.addEventListener('resize', this.onResize_.bind(this));
 	}
+
+    window.mustShowRotateInstructions = true;
 }
 CardboardVRDisplay.prototype = new VRDisplay();
 
@@ -1643,7 +1652,7 @@ CardboardVRDisplay.prototype.beginPresent_ = function () {
 		}.bind(this));
 	}
 
-	if (this.rotateInstructions_) {
+	if (window.mustShowRotateInstructions && this.rotateInstructions_) {
 		if (Util.isLandscapeMode() && Util.isMobile()) {
 			// In landscape mode, temporarily show the "put into Cardboard"
 			// interstitial. Otherwise, do the default thing.
@@ -1651,6 +1660,8 @@ CardboardVRDisplay.prototype.beginPresent_ = function () {
 		} else {
 			this.rotateInstructions_.update();
 		}
+	} else if(!window.mustShowRotateInstructions) {
+		window.mustShowRotateInstructions = true;
 	}
 
 	// Listen for orientation change events in order to show interstitial.

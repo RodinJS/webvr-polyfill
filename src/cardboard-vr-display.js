@@ -60,6 +60,8 @@ function CardboardVRDisplay() {
 		// Listen for resize events to workaround this awful Safari bug.
 		window.addEventListener('resize', this.onResize_.bind(this));
 	}
+
+    window.mustShowRotateInstructions = true;
 }
 CardboardVRDisplay.prototype = new VRDisplay();
 
@@ -155,7 +157,7 @@ CardboardVRDisplay.prototype.beginPresent_ = function () {
 		}.bind(this));
 	}
 
-	if (this.rotateInstructions_) {
+	if (window.mustShowRotateInstructions && this.rotateInstructions_) {
 		if (Util.isLandscapeMode() && Util.isMobile()) {
 			// In landscape mode, temporarily show the "put into Cardboard"
 			// interstitial. Otherwise, do the default thing.
@@ -163,6 +165,8 @@ CardboardVRDisplay.prototype.beginPresent_ = function () {
 		} else {
 			this.rotateInstructions_.update();
 		}
+	} else if(!window.mustShowRotateInstructions) {
+		window.mustShowRotateInstructions = true;
 	}
 
 	// Listen for orientation change events in order to show interstitial.
