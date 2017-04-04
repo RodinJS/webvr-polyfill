@@ -1,13 +1,319 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
-/*
-object-assign
-(c) Sindre Sorhus
-@license MIT
-*/
-
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.WebVRPolyfill = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 'use strict';
+
+var has = Object.prototype.hasOwnProperty
+  , prefix = '~';
+
+/**
+ * Constructor to create a storage for our `EE` objects.
+ * An `Events` instance is a plain object whose properties are event names.
+ *
+ * @constructor
+ * @api private
+ */
+function Events() {}
+
+//
+// We try to not inherit from `Object.prototype`. In some engines creating an
+// instance in this way is faster than calling `Object.create(null)` directly.
+// If `Object.create(null)` is not supported we prefix the event names with a
+// character to make sure that the built-in object properties are not
+// overridden or used as an attack vector.
+//
+if (Object.create) {
+  Events.prototype = Object.create(null);
+
+  //
+  // This hack is needed because the `__proto__` property is still inherited in
+  // some old browsers like Android 4, iPhone 5.1, Opera 11 and Safari 5.
+  //
+  if (!new Events().__proto__) prefix = false;
+}
+
+/**
+ * Representation of a single event listener.
+ *
+ * @param {Function} fn The listener function.
+ * @param {Mixed} context The context to invoke the listener with.
+ * @param {Boolean} [once=false] Specify if the listener is a one-time listener.
+ * @constructor
+ * @api private
+ */
+function EE(fn, context, once) {
+  this.fn = fn;
+  this.context = context;
+  this.once = once || false;
+}
+
+/**
+ * Minimal `EventEmitter` interface that is molded against the Node.js
+ * `EventEmitter` interface.
+ *
+ * @constructor
+ * @api public
+ */
+function EventEmitter() {
+  this._events = new Events();
+  this._eventsCount = 0;
+}
+
+/**
+ * Return an array listing the events for which the emitter has registered
+ * listeners.
+ *
+ * @returns {Array}
+ * @api public
+ */
+EventEmitter.prototype.eventNames = function eventNames() {
+  var names = []
+    , events
+    , name;
+
+  if (this._eventsCount === 0) return names;
+
+  for (name in (events = this._events)) {
+    if (has.call(events, name)) names.push(prefix ? name.slice(1) : name);
+  }
+
+  if (Object.getOwnPropertySymbols) {
+    return names.concat(Object.getOwnPropertySymbols(events));
+  }
+
+  return names;
+};
+
+/**
+ * Return the listeners registered for a given event.
+ *
+ * @param {String|Symbol} event The event name.
+ * @param {Boolean} exists Only check if there are listeners.
+ * @returns {Array|Boolean}
+ * @api public
+ */
+EventEmitter.prototype.listeners = function listeners(event, exists) {
+  var evt = prefix ? prefix + event : event
+    , available = this._events[evt];
+
+  if (exists) return !!available;
+  if (!available) return [];
+  if (available.fn) return [available.fn];
+
+  for (var i = 0, l = available.length, ee = new Array(l); i < l; i++) {
+    ee[i] = available[i].fn;
+  }
+
+  return ee;
+};
+
+/**
+ * Calls each of the listeners registered for a given event.
+ *
+ * @param {String|Symbol} event The event name.
+ * @returns {Boolean} `true` if the event had listeners, else `false`.
+ * @api public
+ */
+EventEmitter.prototype.emit = function emit(event, a1, a2, a3, a4, a5) {
+  var evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) return false;
+
+  var listeners = this._events[evt]
+    , len = arguments.length
+    , args
+    , i;
+
+  if (listeners.fn) {
+    if (listeners.once) this.removeListener(event, listeners.fn, undefined, true);
+
+    switch (len) {
+      case 1: return listeners.fn.call(listeners.context), true;
+      case 2: return listeners.fn.call(listeners.context, a1), true;
+      case 3: return listeners.fn.call(listeners.context, a1, a2), true;
+      case 4: return listeners.fn.call(listeners.context, a1, a2, a3), true;
+      case 5: return listeners.fn.call(listeners.context, a1, a2, a3, a4), true;
+      case 6: return listeners.fn.call(listeners.context, a1, a2, a3, a4, a5), true;
+    }
+
+    for (i = 1, args = new Array(len -1); i < len; i++) {
+      args[i - 1] = arguments[i];
+    }
+
+    listeners.fn.apply(listeners.context, args);
+  } else {
+    var length = listeners.length
+      , j;
+
+    for (i = 0; i < length; i++) {
+      if (listeners[i].once) this.removeListener(event, listeners[i].fn, undefined, true);
+
+      switch (len) {
+        case 1: listeners[i].fn.call(listeners[i].context); break;
+        case 2: listeners[i].fn.call(listeners[i].context, a1); break;
+        case 3: listeners[i].fn.call(listeners[i].context, a1, a2); break;
+        case 4: listeners[i].fn.call(listeners[i].context, a1, a2, a3); break;
+        default:
+          if (!args) for (j = 1, args = new Array(len -1); j < len; j++) {
+            args[j - 1] = arguments[j];
+          }
+
+          listeners[i].fn.apply(listeners[i].context, args);
+      }
+    }
+  }
+
+  return true;
+};
+
+/**
+ * Add a listener for a given event.
+ *
+ * @param {String|Symbol} event The event name.
+ * @param {Function} fn The listener function.
+ * @param {Mixed} [context=this] The context to invoke the listener with.
+ * @returns {EventEmitter} `this`.
+ * @api public
+ */
+EventEmitter.prototype.on = function on(event, fn, context) {
+  var listener = new EE(fn, context || this)
+    , evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) this._events[evt] = listener, this._eventsCount++;
+  else if (!this._events[evt].fn) this._events[evt].push(listener);
+  else this._events[evt] = [this._events[evt], listener];
+
+  return this;
+};
+
+/**
+ * Add a one-time listener for a given event.
+ *
+ * @param {String|Symbol} event The event name.
+ * @param {Function} fn The listener function.
+ * @param {Mixed} [context=this] The context to invoke the listener with.
+ * @returns {EventEmitter} `this`.
+ * @api public
+ */
+EventEmitter.prototype.once = function once(event, fn, context) {
+  var listener = new EE(fn, context || this, true)
+    , evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) this._events[evt] = listener, this._eventsCount++;
+  else if (!this._events[evt].fn) this._events[evt].push(listener);
+  else this._events[evt] = [this._events[evt], listener];
+
+  return this;
+};
+
+/**
+ * Remove the listeners of a given event.
+ *
+ * @param {String|Symbol} event The event name.
+ * @param {Function} fn Only remove the listeners that match this function.
+ * @param {Mixed} context Only remove the listeners that have this context.
+ * @param {Boolean} once Only remove one-time listeners.
+ * @returns {EventEmitter} `this`.
+ * @api public
+ */
+EventEmitter.prototype.removeListener = function removeListener(event, fn, context, once) {
+  var evt = prefix ? prefix + event : event;
+
+  if (!this._events[evt]) return this;
+  if (!fn) {
+    if (--this._eventsCount === 0) this._events = new Events();
+    else delete this._events[evt];
+    return this;
+  }
+
+  var listeners = this._events[evt];
+
+  if (listeners.fn) {
+    if (
+         listeners.fn === fn
+      && (!once || listeners.once)
+      && (!context || listeners.context === context)
+    ) {
+      if (--this._eventsCount === 0) this._events = new Events();
+      else delete this._events[evt];
+    }
+  } else {
+    for (var i = 0, events = [], length = listeners.length; i < length; i++) {
+      if (
+           listeners[i].fn !== fn
+        || (once && !listeners[i].once)
+        || (context && listeners[i].context !== context)
+      ) {
+        events.push(listeners[i]);
+      }
+    }
+
+    //
+    // Reset the array, or remove it completely if we have no more listeners.
+    //
+    if (events.length) this._events[evt] = events.length === 1 ? events[0] : events;
+    else if (--this._eventsCount === 0) this._events = new Events();
+    else delete this._events[evt];
+  }
+
+  return this;
+};
+
+/**
+ * Remove all listeners, or those of the specified event.
+ *
+ * @param {String|Symbol} [event] The event name.
+ * @returns {EventEmitter} `this`.
+ * @api public
+ */
+EventEmitter.prototype.removeAllListeners = function removeAllListeners(event) {
+  var evt;
+
+  if (event) {
+    evt = prefix ? prefix + event : event;
+    if (this._events[evt]) {
+      if (--this._eventsCount === 0) this._events = new Events();
+      else delete this._events[evt];
+    }
+  } else {
+    this._events = new Events();
+    this._eventsCount = 0;
+  }
+
+  return this;
+};
+
+//
+// Alias methods names because people roll like that.
+//
+EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+EventEmitter.prototype.addListener = EventEmitter.prototype.on;
+
+//
+// This function doesn't apply anymore.
+//
+EventEmitter.prototype.setMaxListeners = function setMaxListeners() {
+  return this;
+};
+
+//
+// Expose the prefix.
+//
+EventEmitter.prefixed = prefix;
+
+//
+// Allow `EventEmitter` to be imported as module namespace.
+//
+EventEmitter.EventEmitter = EventEmitter;
+
+//
+// Expose the module.
+//
+if ('undefined' !== typeof module) {
+  module.exports = EventEmitter;
+}
+
+},{}],2:[function(_dereq_,module,exports){
 /* eslint-disable no-unused-vars */
-var getOwnPropertySymbols = Object.getOwnPropertySymbols;
+'use strict';
 var hasOwnProperty = Object.prototype.hasOwnProperty;
 var propIsEnumerable = Object.prototype.propertyIsEnumerable;
 
@@ -19,51 +325,7 @@ function toObject(val) {
 	return Object(val);
 }
 
-function shouldUseNative() {
-	try {
-		if (!Object.assign) {
-			return false;
-		}
-
-		// Detect buggy property enumeration order in older V8 versions.
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
-		test1[5] = 'de';
-		if (Object.getOwnPropertyNames(test1)[0] === '5') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test2 = {};
-		for (var i = 0; i < 10; i++) {
-			test2['_' + String.fromCharCode(i)] = i;
-		}
-		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
-			return test2[n];
-		});
-		if (order2.join('') !== '0123456789') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test3 = {};
-		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
-			test3[letter] = letter;
-		});
-		if (Object.keys(Object.assign({}, test3)).join('') !==
-				'abcdefghijklmnopqrst') {
-			return false;
-		}
-
-		return true;
-	} catch (err) {
-		// We don't expect any of the above to throw, but better to be safe.
-		return false;
-	}
-}
-
-module.exports = shouldUseNative() ? Object.assign : function (target, source) {
+module.exports = Object.assign || function (target, source) {
 	var from;
 	var to = toObject(target);
 	var symbols;
@@ -77,8 +339,8 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 			}
 		}
 
-		if (getOwnPropertySymbols) {
-			symbols = getOwnPropertySymbols(from);
+		if (Object.getOwnPropertySymbols) {
+			symbols = Object.getOwnPropertySymbols(from);
 			for (var i = 0; i < symbols.length; i++) {
 				if (propIsEnumerable.call(from, symbols[i])) {
 					to[symbols[i]] = from[symbols[i]];
@@ -90,7 +352,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],2:[function(_dereq_,module,exports){
+},{}],3:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -310,12 +572,8 @@ VRDisplay.prototype.requestPresent = function(layers) {
       }
 
       for (var i = 0; i < 4; i++) {
-        if (layer.leftBounds[i] !== leftBounds[i]) {
-          layer.leftBounds[i] = leftBounds[i];
-        }
-        if (layer.rightBounds[i] !== rightBounds[i]) {
-          layer.rightBounds[i] = rightBounds[i];
-        }
+        layer.leftBounds[i] = leftBounds[i];
+        layer.rightBounds[i] = rightBounds[i];
       }
 
       resolve();
@@ -379,7 +637,7 @@ VRDisplay.prototype.requestPresent = function(layers) {
       if (Util.requestFullscreen(fullscreenElement)) {
         self.wakelock_.request();
         self.waitingForPresent_ = true;
-      } else if (Util.isIOS() || Util.isWebViewAndroid()) {
+      } else if (Util.isIOS()) {
         // *sigh* Just fake it.
         self.wakelock_.request();
         self.isPresenting = true;
@@ -410,13 +668,6 @@ VRDisplay.prototype.exitPresent = function() {
         self.fireVRDisplayPresentChange_();
       }
 
-      if(Util.isWebViewAndroid()) {
-        self.removeFullscreenWrapper();
-        self.removeFullscreenListeners_();
-        self.endPresent_();
-        self.fireVRDisplayPresentChange_();
-      }
-
       resolve();
     } else {
       reject(new Error('Was not presenting to VRDisplay.'));
@@ -432,8 +683,10 @@ VRDisplay.prototype.getLayers = function() {
 };
 
 VRDisplay.prototype.fireVRDisplayPresentChange_ = function() {
+  // Important: unfortunately we cannot have full spec compliance here.
+  // CustomEvent custom fields all go under e.detail (so the VRDisplay ends up
+  // being e.detail.display, instead of e.display as per WebVR spec).
   var event = new CustomEvent('vrdisplaypresentchange', {detail: {display: this}});
-  event.display = this;
   window.dispatchEvent(event);
 };
 
@@ -547,7 +800,7 @@ module.exports.VRDevice = VRDevice;
 module.exports.HMDVRDevice = HMDVRDevice;
 module.exports.PositionSensorVRDevice = PositionSensorVRDevice;
 
-},{"./util.js":22,"./wakelock.js":24}],3:[function(_dereq_,module,exports){
+},{"./util.js":22,"./wakelock.js":24}],4:[function(_dereq_,module,exports){
 /*
  * Copyright 2016 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1197,7 +1450,7 @@ CardboardDistorter.prototype.getOwnPropertyDescriptor_ = function(proto, attrNam
 
 module.exports = CardboardDistorter;
 
-},{"./cardboard-ui.js":4,"./deps/wglu-preserve-state.js":6,"./util.js":22}],4:[function(_dereq_,module,exports){
+},{"./cardboard-ui.js":5,"./deps/wglu-preserve-state.js":7,"./util.js":22}],5:[function(_dereq_,module,exports){
 /*
  * Copyright 2016 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1217,26 +1470,26 @@ var Util = _dereq_('./util.js');
 var WGLUPreserveGLState = _dereq_('./deps/wglu-preserve-state.js');
 
 var uiVS = [
-	'attribute vec2 position;',
+  'attribute vec2 position;',
 
-	'uniform mat4 projectionMat;',
+  'uniform mat4 projectionMat;',
 
-	'void main() {',
-	'  gl_Position = projectionMat * vec4( position, -1.0, 1.0 );',
-	'}',
+  'void main() {',
+  '  gl_Position = projectionMat * vec4( position, -1.0, 1.0 );',
+  '}',
 ].join('\n');
 
 var uiFS = [
-	'precision mediump float;',
+  'precision mediump float;',
 
-	'uniform vec4 color;',
+  'uniform vec4 color;',
 
-	'void main() {',
-	'  gl_FragColor = color;',
-	'}',
+  'void main() {',
+  '  gl_FragColor = color;',
+  '}',
 ].join('\n');
 
-var DEG2RAD = Math.PI / 180.0;
+var DEG2RAD = Math.PI/180.0;
 
 // The gear has 6 identical sections, each spanning 60 degrees.
 var kAnglePerGearSection = 60;
@@ -1258,18 +1511,18 @@ var kMiddleRadius = 0.75;
 var kInnerRadius = 0.3125;
 
 // Center line thickness in DP.
-var kCenterLineThicknessDp = 2;
+var kCenterLineThicknessDp = 4;
 
 // Button width in DP.
-var kButtonWidthDp = 24;
+var kButtonWidthDp = 28;
 
 // Factor to scale the touch area that responds to the touch.
 var kTouchSlopFactor = 1.5;
 
 var Angles = [
-	0, kOuterRimEndAngle, kInnerRimBeginAngle,
-	kAnglePerGearSection - kInnerRimBeginAngle,
-	kAnglePerGearSection - kOuterRimEndAngle
+  0, kOuterRimEndAngle, kInnerRimBeginAngle,
+  kAnglePerGearSection - kInnerRimBeginAngle,
+  kAnglePerGearSection - kOuterRimEndAngle
 ];
 
 /**
@@ -1277,222 +1530,215 @@ var Angles = [
  * this is rendered into covers the entire screen (or close to it.)
  */
 function CardboardUI(gl) {
-	this.gl = gl;
+  this.gl = gl;
 
-	this.attribs = {
-		position: 0
-	};
-	this.program = Util.linkProgram(gl, uiVS, uiFS, this.attribs);
-	this.uniforms = Util.getProgramUniforms(gl, this.program);
+  this.attribs = {
+    position: 0
+  };
+  this.program = Util.linkProgram(gl, uiVS, uiFS, this.attribs);
+  this.uniforms = Util.getProgramUniforms(gl, this.program);
 
-	this.vertexBuffer = gl.createBuffer();
-	this.gearOffset = 0;
-	this.gearVertexCount = 0;
-	this.arrowOffset = 0;
-	this.arrowVertexCount = 0;
+  this.vertexBuffer = gl.createBuffer();
+  this.gearOffset = 0;
+  this.gearVertexCount = 0;
+  this.arrowOffset = 0;
+  this.arrowVertexCount = 0;
 
-	this.projMat = new Float32Array(16);
+  this.projMat = new Float32Array(16);
 
-	this.listener = null;
+  this.listener = null;
 
-	this.onResize();
+  this.onResize();
 };
 
 /**
  * Tears down all the resources created by the UI renderer.
  */
-CardboardUI.prototype.destroy = function () {
-	var gl = this.gl;
+CardboardUI.prototype.destroy = function() {
+  var gl = this.gl;
 
-	if (this.listener) {
-		gl.canvas.removeEventListener('click', this.listener, false);
-	}
+  if (this.listener) {
+    gl.canvas.removeEventListener('click', this.listener, false);
+  }
 
-	gl.deleteProgram(this.program);
-	gl.deleteBuffer(this.vertexBuffer);
+  gl.deleteProgram(this.program);
+  gl.deleteBuffer(this.vertexBuffer);
 };
 
 /**
  * Adds a listener to clicks on the gear and back icons
  */
-CardboardUI.prototype.listen = function (optionsCallback, backCallback) {
-	var canvas = this.gl.canvas;
-	this.listener = function (event) {
-		var midline = canvas.clientWidth / 2;
-		var buttonSize = kButtonWidthDp * kTouchSlopFactor;
-		// Check to see if the user clicked on (or around) the gear icon
-
-		if (event.clientX > midline - buttonSize &&
-			event.clientX < midline + buttonSize &&
-			event.clientY > canvas.clientHeight - buttonSize) {
-			optionsCallback(event);
-		}
-		// Check to see if the user clicked on (or around) the back icon
-
-		else
-		if (event.clientX > canvas.clientWidth - buttonSize && event.clientY < buttonSize) {
-			backCallback(event);
-		}
-	};
-	canvas.addEventListener('click', this.listener, false);
+CardboardUI.prototype.listen = function(optionsCallback, backCallback) {
+  var canvas = this.gl.canvas;
+  this.listener = function(event) {
+    var midline = canvas.clientWidth / 2;
+    var buttonSize = kButtonWidthDp * kTouchSlopFactor;
+    // Check to see if the user clicked on (or around) the gear icon
+    if (event.clientX > midline - buttonSize &&
+        event.clientX < midline + buttonSize &&
+        event.clientY > canvas.clientHeight - buttonSize) {
+      optionsCallback(event);
+    }
+    // Check to see if the user clicked on (or around) the back icon
+    else if (event.clientX < buttonSize && event.clientY < buttonSize) {
+      backCallback(event);
+    }
+  };
+  canvas.addEventListener('click', this.listener, false);
 };
 
 /**
  * Builds the UI mesh.
  */
-CardboardUI.prototype.onResize = function () {
-	var gl = this.gl;
-	var self = this;
+CardboardUI.prototype.onResize = function() {
+  var gl = this.gl;
+  var self = this;
 
-	var glState = [
-		gl.ARRAY_BUFFER_BINDING
-	];
+  var glState = [
+    gl.ARRAY_BUFFER_BINDING
+  ];
 
-	WGLUPreserveGLState(gl, glState, function (gl) {
-		var vertices = [];
+  WGLUPreserveGLState(gl, glState, function(gl) {
+    var vertices = [];
 
-		var midline = gl.drawingBufferWidth / 2;
+    var midline = gl.drawingBufferWidth / 2;
 
-		// Assumes your canvas width and height is scaled proportionately.
-		// TODO(smus): The following causes buttons to become huge on iOS, but seems
-		// like the right thing to do. For now, added a hack. But really, investigate why.
-		var dps = (gl.drawingBufferWidth / (screen.width * window.devicePixelRatio));
-		if (!Util.isIOS()) {
-			dps *= window.devicePixelRatio;
-		}
+    // Assumes your canvas width and height is scaled proportionately.
+    // TODO(smus): The following causes buttons to become huge on iOS, but seems
+    // like the right thing to do. For now, added a hack. But really, investigate why.
+    var dps = (gl.drawingBufferWidth / (screen.width * window.devicePixelRatio));
+    if (!Util.isIOS()) {
+      dps *= window.devicePixelRatio;
+    }
 
-		var lineWidth = kCenterLineThicknessDp * dps / 2;
-		var buttonSize = kButtonWidthDp * kTouchSlopFactor * dps;
-		var buttonScale = kButtonWidthDp * dps / 2;
-		var buttonBorder = ((kButtonWidthDp * kTouchSlopFactor) - kButtonWidthDp) * dps;
+    var lineWidth = kCenterLineThicknessDp * dps / 2;
+    var buttonSize = kButtonWidthDp * kTouchSlopFactor * dps;
+    var buttonScale = kButtonWidthDp * dps / 2;
+    var buttonBorder = ((kButtonWidthDp * kTouchSlopFactor) - kButtonWidthDp) * dps;
 
-		// Build centerline
-		vertices.push(midline - lineWidth, buttonSize);
-		vertices.push(midline - lineWidth, gl.drawingBufferHeight / 2.2);
-		vertices.push(midline + lineWidth, buttonSize);
-		vertices.push(midline + lineWidth, gl.drawingBufferHeight / 2.2);
+    // Build centerline
+    vertices.push(midline - lineWidth, buttonSize);
+    vertices.push(midline - lineWidth, gl.drawingBufferHeight);
+    vertices.push(midline + lineWidth, buttonSize);
+    vertices.push(midline + lineWidth, gl.drawingBufferHeight);
 
-		// Build gear
-		self.gearOffset = (vertices.length / 2);
+    // Build gear
+    self.gearOffset = (vertices.length / 2);
 
-		function addGearSegment(theta, r) {
-			var angle = (90 - theta) * DEG2RAD;
-			var x = Math.cos(angle);
-			var y = Math.sin(angle);
-			vertices.push(kInnerRadius * x * buttonScale + midline, kInnerRadius * y * buttonScale + buttonScale);
-			vertices.push(r * x * buttonScale + midline, r * y * buttonScale + buttonScale);
-		}
+    function addGearSegment(theta, r) {
+      var angle = (90 - theta) * DEG2RAD;
+      var x = Math.cos(angle);
+      var y = Math.sin(angle);
+      vertices.push(kInnerRadius * x * buttonScale + midline, kInnerRadius * y * buttonScale + buttonScale);
+      vertices.push(r * x * buttonScale + midline, r * y * buttonScale + buttonScale);
+    }
 
-		for (var i = 0; i <= 6; i++) {
-			var segmentTheta = i * kAnglePerGearSection;
+    for (var i = 0; i <= 6; i++) {
+      var segmentTheta = i * kAnglePerGearSection;
 
-			addGearSegment(segmentTheta, kOuterRadius);
-			addGearSegment(segmentTheta + kOuterRimEndAngle, kOuterRadius);
-			addGearSegment(segmentTheta + kInnerRimBeginAngle, kMiddleRadius);
-			addGearSegment(segmentTheta + (kAnglePerGearSection - kInnerRimBeginAngle), kMiddleRadius);
-			addGearSegment(segmentTheta + (kAnglePerGearSection - kOuterRimEndAngle), kOuterRadius);
-		}
+      addGearSegment(segmentTheta, kOuterRadius);
+      addGearSegment(segmentTheta + kOuterRimEndAngle, kOuterRadius);
+      addGearSegment(segmentTheta + kInnerRimBeginAngle, kMiddleRadius);
+      addGearSegment(segmentTheta + (kAnglePerGearSection - kInnerRimBeginAngle), kMiddleRadius);
+      addGearSegment(segmentTheta + (kAnglePerGearSection - kOuterRimEndAngle), kOuterRadius);
+    }
 
-		self.gearVertexCount = (vertices.length / 2) - self.gearOffset;
+    self.gearVertexCount = (vertices.length / 2) - self.gearOffset;
 
-		// Build close button
-		self.arrowOffset = (vertices.length / 2);
+    // Build back arrow
+    self.arrowOffset = (vertices.length / 2);
 
-		var angledLineWidth = lineWidth / Math.sin(45 * DEG2RAD);
-		var A = buttonScale / Math.sin(Math.PI / 4) / 1.5;
-		var D = lineWidth * 2;
+    function addArrowVertex(x, y) {
+      vertices.push(buttonBorder + x, gl.drawingBufferHeight - buttonBorder - y);
+    }
 
-		function addCloseButtonVertex(x, y) {
-			//vertices.push(buttonBorder + x, buttonBorder + y);
-			var X = Math.cos(Math.PI / 4) * x - Math.sin(Math.PI / 4) * y;
-			var Y = Math.sin(Math.PI / 4) * x + Math.cos(Math.PI / 4) * y;
-			vertices.push(gl.drawingBufferWidth - buttonBorder * 2 - X, gl.drawingBufferHeight - buttonBorder * 2 - Y);
-		}
+    var angledLineWidth = lineWidth / Math.sin(45 * DEG2RAD);
 
-		function drawRectangle(x, y, w, h) {
-			addCloseButtonVertex(x, y);
-			addCloseButtonVertex(x + w, y);
-			addCloseButtonVertex(x + w, y + h);
-			addCloseButtonVertex(x, y + h);
-			addCloseButtonVertex(x, y);
-		}
+    addArrowVertex(0, buttonScale);
+    addArrowVertex(buttonScale, 0);
+    addArrowVertex(buttonScale + angledLineWidth, angledLineWidth);
+    addArrowVertex(angledLineWidth, buttonScale + angledLineWidth);
 
+    addArrowVertex(angledLineWidth, buttonScale - angledLineWidth);
+    addArrowVertex(0, buttonScale);
+    addArrowVertex(buttonScale, buttonScale * 2);
+    addArrowVertex(buttonScale + angledLineWidth, (buttonScale * 2) - angledLineWidth);
 
-		drawRectangle(-A, -D / 2, 2 * A, D);
-		drawRectangle(-D / 2, -A, D, 2 * A);
+    addArrowVertex(angledLineWidth, buttonScale - angledLineWidth);
+    addArrowVertex(0, buttonScale);
 
-		self.arrowVertexCount = 5;
+    addArrowVertex(angledLineWidth, buttonScale - lineWidth);
+    addArrowVertex(kButtonWidthDp * dps, buttonScale - lineWidth);
+    addArrowVertex(angledLineWidth, buttonScale + lineWidth);
+    addArrowVertex(kButtonWidthDp * dps, buttonScale + lineWidth);
 
-		// Buffer data
-		gl.bindBuffer(gl.ARRAY_BUFFER, self.vertexBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-	});
+    self.arrowVertexCount = (vertices.length / 2) - self.arrowOffset;
+
+    // Buffer data
+    gl.bindBuffer(gl.ARRAY_BUFFER, self.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  });
 };
 
 /**
  * Performs distortion pass on the injected backbuffer, rendering it to the real
  * backbuffer.
  */
-CardboardUI.prototype.render = function () {
-	var gl = this.gl;
-	var self = this;
+CardboardUI.prototype.render = function() {
+  var gl = this.gl;
+  var self = this;
 
-	var glState = [
-		gl.CULL_FACE,
-		gl.DEPTH_TEST,
-		gl.BLEND,
-		gl.SCISSOR_TEST,
-		gl.STENCIL_TEST,
-		gl.COLOR_WRITEMASK,
-		gl.VIEWPORT,
+  var glState = [
+    gl.CULL_FACE,
+    gl.DEPTH_TEST,
+    gl.BLEND,
+    gl.SCISSOR_TEST,
+    gl.STENCIL_TEST,
+    gl.COLOR_WRITEMASK,
+    gl.VIEWPORT,
 
-		gl.CURRENT_PROGRAM,
-		gl.ARRAY_BUFFER_BINDING
-	];
+    gl.CURRENT_PROGRAM,
+    gl.ARRAY_BUFFER_BINDING
+  ];
 
-	WGLUPreserveGLState(gl, glState, function (gl) {
-		// Make sure the GL state is in a good place
-		gl.disable(gl.CULL_FACE);
-		gl.disable(gl.DEPTH_TEST);
-		gl.disable(gl.BLEND);
-		gl.disable(gl.SCISSOR_TEST);
-		gl.disable(gl.STENCIL_TEST);
-		gl.colorMask(true, true, true, true);
-		gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  WGLUPreserveGLState(gl, glState, function(gl) {
+    // Make sure the GL state is in a good place
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.colorMask(true, true, true, true);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
 
-		self.renderNoState();
-	});
+    self.renderNoState();
+  });
 };
 
-CardboardUI.prototype.renderNoState = function () {
-	var gl = this.gl;
+CardboardUI.prototype.renderNoState = function() {
+  var gl = this.gl;
 
-	// Bind distortion program and mesh
-	gl.useProgram(this.program);
+  // Bind distortion program and mesh
+  gl.useProgram(this.program);
 
-	gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-	gl.enableVertexAttribArray(this.attribs.position);
-	gl.vertexAttribPointer(this.attribs.position, 2, gl.FLOAT, false, 8, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+  gl.enableVertexAttribArray(this.attribs.position);
+  gl.vertexAttribPointer(this.attribs.position, 2, gl.FLOAT, false, 8, 0);
 
-	gl.uniform4f(this.uniforms.color, 1.0, 1.0, 1.0, 1.0);
+  gl.uniform4f(this.uniforms.color, 1.0, 1.0, 1.0, 1.0);
 
-	Util.orthoMatrix(this.projMat, 0, gl.drawingBufferWidth, 0, gl.drawingBufferHeight, 0.1, 1024.0);
-	gl.uniformMatrix4fv(this.uniforms.projectionMat, false, this.projMat);
+  Util.orthoMatrix(this.projMat, 0, gl.drawingBufferWidth, 0, gl.drawingBufferHeight, 0.1, 1024.0);
+  gl.uniformMatrix4fv(this.uniforms.projectionMat, false, this.projMat);
 
-	// Draws UI element
-	gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-	gl.drawArrays(gl.TRIANGLE_STRIP, this.gearOffset, this.gearVertexCount);
-	//gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, this.arrowVertexCount);
-	//drawing a close (X) button from two rectangles
-	//todo: implement this stuff better
-	gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, 5);
-	gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset + 5, 5);
-
+  // Draws UI element
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.drawArrays(gl.TRIANGLE_STRIP, this.gearOffset, this.gearVertexCount);
+  gl.drawArrays(gl.TRIANGLE_STRIP, this.arrowOffset, this.arrowVertexCount);
 };
 
 module.exports = CardboardUI;
 
-},{"./deps/wglu-preserve-state.js":6,"./util.js":22}],5:[function(_dereq_,module,exports){
+},{"./deps/wglu-preserve-state.js":7,"./util.js":22}],6:[function(_dereq_,module,exports){
 /*
  * Copyright 2016 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1519,278 +1765,261 @@ var VRDisplay = _dereq_('./base.js').VRDisplay;
 var Util = _dereq_('./util.js');
 
 var Eye = {
-	LEFT: 'left',
-	RIGHT: 'right'
+  LEFT: 'left',
+  RIGHT: 'right'
 };
 
 /**
  * VRDisplay based on mobile device parameters and DeviceMotion APIs.
  */
 function CardboardVRDisplay() {
-	this.displayName = 'Cardboard VRDisplay (webvr-polyfill)';
+  this.displayName = 'Cardboard VRDisplay (webvr-polyfill)';
 
-	this.capabilities.hasOrientation = true;
-	this.capabilities.canPresent = true;
+  this.capabilities.hasOrientation = true;
+  this.capabilities.canPresent = true;
 
-	// "Private" members.
-	this.bufferScale_ = WebVRConfig.BUFFER_SCALE;
-	this.poseSensor_ = new FusionPoseSensor();
-	this.distorter_ = null;
-	this.cardboardUI_ = null;
+  // "Private" members.
+  this.bufferScale_ = WebVRConfig.BUFFER_SCALE;
+  this.poseSensor_ = new FusionPoseSensor();
+  this.distorter_ = null;
+  this.cardboardUI_ = null;
 
-	this.dpdb_ = new Dpdb(true, this.onDeviceParamsUpdated_.bind(this));
-	this.deviceInfo_ = new DeviceInfo(this.dpdb_.getDeviceParams());
+  this.dpdb_ = new Dpdb(true, this.onDeviceParamsUpdated_.bind(this));
+  this.deviceInfo_ = new DeviceInfo(this.dpdb_.getDeviceParams());
 
-	this.viewerSelector_ = new ViewerSelector();
-	this.viewerSelector_.on('change', this.onViewerChanged_.bind(this));
+  this.viewerSelector_ = new ViewerSelector();
+  this.viewerSelector_.on('change', this.onViewerChanged_.bind(this));
 
-	// Set the correct initial viewer.
-	this.deviceInfo_.setViewer(this.viewerSelector_.getCurrentViewer());
+  // Set the correct initial viewer.
+  this.deviceInfo_.setViewer(this.viewerSelector_.getCurrentViewer());
 
-	if (!WebVRConfig.ROTATE_INSTRUCTIONS_DISABLED) {
-		this.rotateInstructions_ = new RotateInstructions();
-	}
+  if (!WebVRConfig.ROTATE_INSTRUCTIONS_DISABLED) {
+    this.rotateInstructions_ = new RotateInstructions();
+  }
 
-	if (Util.isIOS()) {
-		// Listen for resize events to workaround this awful Safari bug.
-		window.addEventListener('resize', this.onResize_.bind(this));
-	}
-
-    window.mustShowRotateInstructions = true;
+  if (Util.isIOS()) {
+    // Listen for resize events to workaround this awful Safari bug.
+    window.addEventListener('resize', this.onResize_.bind(this));
+  }
 }
 CardboardVRDisplay.prototype = new VRDisplay();
 
-CardboardVRDisplay.prototype.getImmediatePose = function () {
-	return {
-		position: this.poseSensor_.getPosition(),
-		orientation: this.poseSensor_.getOrientation(),
-		linearVelocity: null,
-		linearAcceleration: null,
-		angularVelocity: null,
-		angularAcceleration: null
-	};
+CardboardVRDisplay.prototype.getImmediatePose = function() {
+  return {
+    position: this.poseSensor_.getPosition(),
+    orientation: this.poseSensor_.getOrientation(),
+    linearVelocity: null,
+    linearAcceleration: null,
+    angularVelocity: null,
+    angularAcceleration: null
+  };
 };
 
-CardboardVRDisplay.prototype.resetPose = function () {
-	this.poseSensor_.resetPose();
+CardboardVRDisplay.prototype.resetPose = function() {
+  this.poseSensor_.resetPose();
 };
 
-CardboardVRDisplay.prototype.getEyeParameters = function (whichEye) {
-	var offset = [this.deviceInfo_.viewer.interLensDistance * 0.5, 0.0, 0.0];
-	var fieldOfView;
+CardboardVRDisplay.prototype.getEyeParameters = function(whichEye) {
+  var offset = [this.deviceInfo_.viewer.interLensDistance * 0.5, 0.0, 0.0];
+  var fieldOfView;
 
-	// TODO: FoV can be a little expensive to compute. Cache when device params change.
-	if (whichEye == Eye.LEFT) {
-		offset[0] *= -1.0;
-		fieldOfView = this.deviceInfo_.getFieldOfViewLeftEye();
-	} else if (whichEye == Eye.RIGHT) {
-		fieldOfView = this.deviceInfo_.getFieldOfViewRightEye();
-	} else {
-		console.error('Invalid eye provided: %s', whichEye);
-		return null;
-	}
+  // TODO: FoV can be a little expensive to compute. Cache when device params change.
+  if (whichEye == Eye.LEFT) {
+    offset[0] *= -1.0;
+    fieldOfView = this.deviceInfo_.getFieldOfViewLeftEye();
+  } else if (whichEye == Eye.RIGHT) {
+    fieldOfView = this.deviceInfo_.getFieldOfViewRightEye();
+  } else {
+    console.error('Invalid eye provided: %s', whichEye);
+    return null;
+  }
 
-	return {
-		fieldOfView: fieldOfView,
-		offset: offset,
-		// TODO: Should be able to provide better values than these.
-		renderWidth: this.deviceInfo_.device.width * 0.5 * this.bufferScale_,
-		renderHeight: this.deviceInfo_.device.height * this.bufferScale_,
-	};
+  return {
+    fieldOfView: fieldOfView,
+    offset: offset,
+    // TODO: Should be able to provide better values than these.
+    renderWidth: this.deviceInfo_.device.width * 0.5 * this.bufferScale_,
+    renderHeight: this.deviceInfo_.device.height * this.bufferScale_,
+  };
 };
 
-CardboardVRDisplay.prototype.onDeviceParamsUpdated_ = function (newParams) {
-	console.log('DPDB reported that device params were updated.');
-	this.deviceInfo_.updateDeviceParams(newParams);
+CardboardVRDisplay.prototype.onDeviceParamsUpdated_ = function(newParams) {
+  if (Util.isDebug()) {
+    console.log('DPDB reported that device params were updated.');
+  }
+  this.deviceInfo_.updateDeviceParams(newParams);
 
-	if (this.distorter_) {
-		this.distorter_.updateDeviceInfo(this.deviceInfo_);
-	}
+  if (this.distorter_) {
+    this.distorter_.updateDeviceInfo(this.deviceInfo_);
+  }
 };
 
 CardboardVRDisplay.prototype.updateBounds_ = function () {
-	if (this.layer_ && this.distorter_ && (this.layer_.leftBounds || this.layer_.rightBounds)) {
-		this.distorter_.setTextureBounds(this.layer_.leftBounds, this.layer_.rightBounds);
-	}
+  if (this.layer_ && this.distorter_ && (this.layer_.leftBounds || this.layer_.rightBounds)) {
+    this.distorter_.setTextureBounds(this.layer_.leftBounds, this.layer_.rightBounds);
+  }
 };
 
-CardboardVRDisplay.prototype.beginPresent_ = function () {
-	var gl = this.layer_.source.getContext('webgl');
-	if (!gl)
-		gl = this.layer_.source.getContext('experimental-webgl');
-	if (!gl)
-		gl = this.layer_.source.getContext('webgl2');
+CardboardVRDisplay.prototype.beginPresent_ = function() {
+  var gl = this.layer_.source.getContext('webgl');
+  if (!gl)
+    gl = this.layer_.source.getContext('experimental-webgl');
+  if (!gl)
+    gl = this.layer_.source.getContext('webgl2');
 
-	if (!gl)
-		return; // Can't do distortion without a WebGL context.
+  if (!gl)
+    return; // Can't do distortion without a WebGL context.
 
-	// Provides a way to opt out of distortion
-	if (this.layer_.predistorted) {
-		if (!WebVRConfig.CARDBOARD_UI_DISABLED) {
-			gl.canvas.width = Util.getScreenWidth() * this.bufferScale_;
-			gl.canvas.height = Util.getScreenHeight() * this.bufferScale_;
-			this.cardboardUI_ = new CardboardUI(gl);
-		}
-	} else {
-		// Create a new distorter for the target context
-		this.distorter_ = new CardboardDistorter(gl);
-		this.distorter_.updateDeviceInfo(this.deviceInfo_);
-		this.cardboardUI_ = this.distorter_.cardboardUI;
-	}
+  // Provides a way to opt out of distortion
+  if (this.layer_.predistorted) {
+    if (!WebVRConfig.CARDBOARD_UI_DISABLED) {
+      gl.canvas.width = Util.getScreenWidth() * this.bufferScale_;
+      gl.canvas.height = Util.getScreenHeight() * this.bufferScale_;
+      this.cardboardUI_ = new CardboardUI(gl);
+    }
+  } else {
+    // Create a new distorter for the target context
+    this.distorter_ = new CardboardDistorter(gl);
+    this.distorter_.updateDeviceInfo(this.deviceInfo_);
+    this.cardboardUI_ = this.distorter_.cardboardUI;
+  }
 
-	if (this.cardboardUI_) {
-		this.cardboardUI_.listen(function (e) {
-			// Options clicked.
-			this.viewerSelector_.show(this.layer_.source.parentElement);
-			e.stopPropagation();
-			e.preventDefault();
-		}.bind(this), function (e) {
-			// Back clicked.
-			this.exitPresent();
-			e.stopPropagation();
-			e.preventDefault();
-		}.bind(this));
-	}
+  if (this.cardboardUI_) {
+    this.cardboardUI_.listen(function(e) {
+      // Options clicked.
+      this.viewerSelector_.show(this.layer_.source.parentElement);
+      e.stopPropagation();
+      e.preventDefault();
+    }.bind(this), function(e) {
+      // Back clicked.
+      this.exitPresent();
+      e.stopPropagation();
+      e.preventDefault();
+    }.bind(this));
+  }
 
-	if (window.mustShowRotateInstructions && this.rotateInstructions_) {
-		if (Util.isLandscapeMode() && Util.isMobile()) {
-			// In landscape mode, temporarily show the "put into Cardboard"
-			// interstitial. Otherwise, do the default thing.
-			this.rotateInstructions_.showTemporarily(3000, this.layer_.source.parentElement);
-		} else {
-			this.rotateInstructions_.update();
-		}
-	} else if(!window.mustShowRotateInstructions) {
-		window.mustShowRotateInstructions = true;
-	}
+  if (this.rotateInstructions_) {
+    if (Util.isLandscapeMode() && Util.isMobile()) {
+      // In landscape mode, temporarily show the "put into Cardboard"
+      // interstitial. Otherwise, do the default thing.
+      this.rotateInstructions_.showTemporarily(3000, this.layer_.source.parentElement);
+    } else {
+      this.rotateInstructions_.update();
+    }
+  }
 
-	// Listen for orientation change events in order to show interstitial.
-	this.orientationHandler = this.onOrientationChange_.bind(this);
+  // Listen for orientation change events in order to show interstitial.
+  this.orientationHandler = this.onOrientationChange_.bind(this);
+  window.addEventListener('orientationchange', this.orientationHandler);
 
-	window.addEventListener('orientationchange', this.orientationHandler);
+  // Listen for present display change events in order to update distorter dimensions
+  this.vrdisplaypresentchangeHandler = this.updateBounds_.bind(this);
+  window.addEventListener('vrdisplaypresentchange', this.vrdisplaypresentchangeHandler);
 
-	window.addEventListener('message', function (e) {
-		if (!e.data.type || e.data.type != 'iframeEvent')
-			return;
-		if (e.data.name == orientationchange)
-			this.orientationHandler();
-	});
-
-	// Listen for present display change events in order to update distorter dimensions
-	this.vrdisplaypresentchangeHandler = this.updateBounds_.bind(this);
-	window.addEventListener('vrdisplaypresentchange', this.vrdisplaypresentchangeHandler);
-
-	// Fire this event initially, to give geometry-distortion clients the chance
-	// to do something custom.
-	this.fireVRDisplayDeviceParamsChange_();
+  // Fire this event initially, to give geometry-distortion clients the chance
+  // to do something custom.
+  this.fireVRDisplayDeviceParamsChange_();
 };
 
-CardboardVRDisplay.prototype.endPresent_ = function () {
-	if (this.distorter_) {
-		this.distorter_.destroy();
-		this.distorter_ = null;
-	}
-	if (this.cardboardUI_) {
-		this.cardboardUI_.destroy();
-		this.cardboardUI_ = null;
-	}
+CardboardVRDisplay.prototype.endPresent_ = function() {
+  if (this.distorter_) {
+    this.distorter_.destroy();
+    this.distorter_ = null;
+  }
+  if (this.cardboardUI_) {
+    this.cardboardUI_.destroy();
+    this.cardboardUI_ = null;
+  }
 
-	if (this.rotateInstructions_) {
-		this.rotateInstructions_.hide();
-	}
-	this.viewerSelector_.hide();
+  if (this.rotateInstructions_) {
+    this.rotateInstructions_.hide();
+  }
+  this.viewerSelector_.hide();
 
-	window.removeEventListener('orientationchange', this.orientationHandler);
-	window.removeEventListener('vrdisplaypresentchange', this.vrdisplaypresentchangeHandler);
+  window.removeEventListener('orientationchange', this.orientationHandler);
+  window.removeEventListener('vrdisplaypresentchange', this.vrdisplaypresentchangeHandler);
 };
 
-CardboardVRDisplay.prototype.submitFrame = function (pose) {
-	if (this.distorter_) {
-		this.distorter_.submitFrame();
-	} else if (this.cardboardUI_ && this.layer_) {
-		// Hack for predistorted: true.
-		var canvas = this.layer_.source.getContext('webgl').canvas;
-		if (canvas.width != this.lastWidth || canvas.height != this.lastHeight) {
-			this.cardboardUI_.onResize();
-		}
-		this.lastWidth = canvas.width;
-		this.lastHeight = canvas.height;
+CardboardVRDisplay.prototype.submitFrame = function(pose) {
+  if (this.distorter_) {
+    this.updateBounds_();
+    this.distorter_.submitFrame();
+  } else if (this.cardboardUI_ && this.layer_) {
+    // Hack for predistorted: true.
+    var canvas = this.layer_.source.getContext('webgl').canvas;
+    if (canvas.width != this.lastWidth || canvas.height != this.lastHeight) {
+      this.cardboardUI_.onResize();
+    }
+    this.lastWidth = canvas.width;
+    this.lastHeight = canvas.height;
 
-		// Render the Cardboard UI.
-		this.cardboardUI_.render();
-	}
+    // Render the Cardboard UI.
+    this.cardboardUI_.render();
+  }
 };
 
-CardboardVRDisplay.prototype.onOrientationChange_ = function (e) {
-	console.log('onOrientationChange_');
+CardboardVRDisplay.prototype.onOrientationChange_ = function(e) {
+  // Hide the viewer selector.
+  this.viewerSelector_.hide();
 
-	// Hide the viewer selector.
-	this.viewerSelector_.hide();
+  // Update the rotate instructions.
+  if (this.rotateInstructions_) {
+    this.rotateInstructions_.update();
+  }
 
-	// Update the rotate instructions.
-	if (this.rotateInstructions_) {
-		this.rotateInstructions_.update();
-	}
-
-	this.onResize_();
+  this.onResize_();
 };
 
-CardboardVRDisplay.prototype.onResize_ = function (e) {
-	if (this.layer_) {
-		var gl = this.layer_.source.getContext('webgl');
+CardboardVRDisplay.prototype.onResize_ = function(e) {
+  if (this.layer_) {
+    var gl = this.layer_.source.getContext('webgl');
+    // Size the CSS canvas.
+    // Added padding on right and bottom because iPhone 5 will not
+    // hide the URL bar unless content is bigger than the screen.
+    // This will not be visible as long as the container element (e.g. body)
+    // is set to 'overflow: hidden'.
+    var cssProperties = [
+      'position: absolute',
+      'top: 0',
+      'left: 0',
+      'width: ' + Math.max(screen.width, screen.height) + 'px',
+      'height: ' + Math.min(screen.height, screen.width) + 'px',
+      'border: 0',
+      'margin: 0',
+      'padding: 0 10px 10px 0',
+    ];
+    gl.canvas.setAttribute('style', cssProperties.join('; ') + ';');
 
-		var cssProperties = [
-			'position: absolute',
-			'top: 0',
-			'left: 0',
-			'width: ' + Math.max(screen.width, screen.height) + 'px',
-			'height: ' + Math.min(screen.height, screen.width) + 'px',
-			'border: 0',
-			'margin: 0'
-		];
-		// Size the CSS canvas.
-		// Added padding on right and bottom because iPhone 5 will not
-		// hide the URL bar unless content is bigger than the screen.
-		// This will not be visible as long as the container element (e.g. body)
-		// is set to 'overflow: hidden'.
-		if (Util.isIOS)
-			cssProperties.push('padding: 0 10px 10px 0');
-		else
-			cssProperties.push('padding: 0 0 0 0');
-
-		gl.canvas.setAttribute('style', cssProperties.join('; ') + ';');
-
-		Util.safariCssSizeWorkaround(gl.canvas);
-	}
+    Util.safariCssSizeWorkaround(gl.canvas);
+  }
 };
 
-CardboardVRDisplay.prototype.onViewerChanged_ = function (viewer) {
-	this.deviceInfo_.setViewer(viewer);
+CardboardVRDisplay.prototype.onViewerChanged_ = function(viewer) {
+  this.deviceInfo_.setViewer(viewer);
 
-	if (this.distorter_) {
-		// Update the distortion appropriately.
-		this.distorter_.updateDeviceInfo(this.deviceInfo_);
-	}
+  if (this.distorter_) {
+    // Update the distortion appropriately.
+    this.distorter_.updateDeviceInfo(this.deviceInfo_);
+  }
 
-	// Fire a new event containing viewer and device parameters for clients that
-	// want to implement their own geometry-based distortion.
-	this.fireVRDisplayDeviceParamsChange_();
+  // Fire a new event containing viewer and device parameters for clients that
+  // want to implement their own geometry-based distortion.
+  this.fireVRDisplayDeviceParamsChange_();
 };
 
-CardboardVRDisplay.prototype.fireVRDisplayDeviceParamsChange_ = function () {
-	var event = new CustomEvent('vrdisplaydeviceparamschange', {
-		detail: {
-			vrdisplay: this,
-			deviceInfo: this.deviceInfo_,
-		}
-	});
-	event.display = this;
-	window.dispatchEvent(event);
+CardboardVRDisplay.prototype.fireVRDisplayDeviceParamsChange_ = function() {
+  var event = new CustomEvent('vrdisplaydeviceparamschange', {
+    detail: {
+      vrdisplay: this,
+      deviceInfo: this.deviceInfo_,
+    }
+  });
+  window.dispatchEvent(event);
 };
 
 module.exports = CardboardVRDisplay;
 
-},{"./base.js":2,"./cardboard-distorter.js":3,"./cardboard-ui.js":4,"./device-info.js":7,"./dpdb/dpdb.js":11,"./rotate-instructions.js":16,"./sensor-fusion/fusion-pose-sensor.js":18,"./util.js":22,"./viewer-selector.js":23}],6:[function(_dereq_,module,exports){
+},{"./base.js":3,"./cardboard-distorter.js":4,"./cardboard-ui.js":5,"./device-info.js":8,"./dpdb/dpdb.js":12,"./rotate-instructions.js":16,"./sensor-fusion/fusion-pose-sensor.js":18,"./util.js":22,"./viewer-selector.js":23}],7:[function(_dereq_,module,exports){
 /*
 Copyright (c) 2016, Brandon Jones.
 
@@ -1955,7 +2184,7 @@ function WGLUPreserveGLState(gl, bindings, callback) {
 }
 
 module.exports = WGLUPreserveGLState;
-},{}],7:[function(_dereq_,module,exports){
+},{}],8:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2322,7 +2551,7 @@ function CardboardViewer(params) {
 DeviceInfo.Viewers = Viewers;
 module.exports = DeviceInfo;
 
-},{"./distortion/distortion.js":9,"./math-util.js":14,"./util.js":22}],8:[function(_dereq_,module,exports){
+},{"./distortion/distortion.js":10,"./math-util.js":14,"./util.js":22}],9:[function(_dereq_,module,exports){
 /*
  * Copyright 2016 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2414,7 +2643,7 @@ module.exports.VRDisplayHMDDevice = VRDisplayHMDDevice;
 module.exports.VRDisplayPositionSensorDevice = VRDisplayPositionSensorDevice;
 
 
-},{"./base.js":2}],9:[function(_dereq_,module,exports){
+},{"./base.js":3}],10:[function(_dereq_,module,exports){
 /**
  * TODO(smus): Implement coefficient inversion.
  */
@@ -2597,7 +2826,7 @@ Distortion.prototype.approximateInverse = function(maxRadius, numSamples) {
 
 module.exports = Distortion;
 
-},{}],10:[function(_dereq_,module,exports){
+},{}],11:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -2639,6 +2868,28 @@ var DPDB_CACHE = {
       { "ua": "ASUS_Z00AD" }
     ],
     "dpi": [ 403.0, 404.6 ],
+    "bw": 3,
+    "ac": 1000
+  },
+
+  {
+    "type": "android",
+    "rules": [
+      { "mdmh": "Google//Pixel XL/" },
+      { "ua": "Pixel XL" }
+    ],
+    "dpi": [537.9, 533],
+    "bw": 3,
+    "ac": 1000
+  },
+
+  {
+    "type": "android",
+    "rules": [
+      { "mdmh": "Google//Pixel/" },
+      { "ua": "Pixel" }
+    ],
+    "dpi": [432.6, 436.7],
     "bw": 3,
     "ac": 1000
   },
@@ -3009,6 +3260,17 @@ var DPDB_CACHE = {
   {
     "type": "android",
     "rules": [
+      { "mdmh": "motorola/*/G4/*" },
+      { "ua": "Moto G (4)" }
+    ],
+    "dpi": 401.0,
+    "bw": 4,
+    "ac": 1000
+  },
+
+  {
+    "type": "android",
+    "rules": [
       { "mdmh": "OnePlus/*/A0001/*" },
       { "ua": "A0001" }
     ],
@@ -3240,6 +3502,17 @@ var DPDB_CACHE = {
   {
     "type": "android",
     "rules": [
+      { "mdmh": "samsung/*/SM-N920W8/*" },
+      { "ua": "SM-N920W8" }
+    ],
+    "dpi": [ 515.1, 518.4 ],
+    "bw": 3,
+    "ac": 1000
+  },
+    
+  {
+    "type": "android",
+    "rules": [
       { "mdmh": "samsung/*/GT-I9300I/*" },
       { "ua": "GT-I9300I" }
     ],
@@ -3416,6 +3689,17 @@ var DPDB_CACHE = {
   {
     "type": "android",
     "rules": [
+      { "mdmh": "samsung/*/SM-G935F/*" },
+      { "ua": "SM-G935F" }
+    ],
+    "dpi": 534,
+    "bw": 3,
+    "ac": 500
+  },
+
+  {
+    "type": "android",
+    "rules": [
       { "mdmh": "Sony/*/C6903/*" },
       { "ua": "C6903" }
     ],
@@ -3511,33 +3795,9 @@ var DPDB_CACHE = {
 
   {
     "type": "ios",
-    "rules": [ { "res": [ 640, 960 ] } ],
-    "dpi": [ 325.1, 328.4 ],
-    "bw": 4,
-    "ac": 1000
-  },
-
-  {
-    "type": "ios",
     "rules": [ { "res": [ 640, 1136 ] } ],
     "dpi": [ 317.1, 320.2 ],
     "bw": 3,
-    "ac": 1000
-  },
-
-  {
-    "type": "ios",
-    "rules": [ { "res": [ 640, 1136 ] } ],
-    "dpi": [ 317.1, 320.2 ],
-    "bw": 3,
-    "ac": 1000
-  },
-
-  {
-    "type": "ios",
-    "rules": [ { "res": [ 750, 1334 ] } ],
-    "dpi": 326.4,
-    "bw": 4,
     "ac": 1000
   },
 
@@ -3559,8 +3819,8 @@ var DPDB_CACHE = {
 
   {
     "type": "ios",
-    "rules": [ { "res": [ 1242, 2208 ] } ],
-    "dpi": [ 453.6, 458.4 ],
+    "rules": [ { "res": [ 1125, 2001 ] } ],
+    "dpi": [ 410.9, 415.4 ],
     "bw": 4,
     "ac": 1000
   }
@@ -3568,7 +3828,7 @@ var DPDB_CACHE = {
 
 module.exports = DPDB_CACHE;
 
-},{}],11:[function(_dereq_,module,exports){
+},{}],12:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -3613,7 +3873,6 @@ function Dpdb(fetchOnline, onDeviceParamsUpdated) {
     // Set the callback.
     this.onDeviceParamsUpdated = onDeviceParamsUpdated;
 
-    console.log('Fetching DPDB...');
     var xhr = new XMLHttpRequest();
     var obj = this;
     xhr.open('GET', ONLINE_DPDB_URL, true);
@@ -3621,7 +3880,6 @@ function Dpdb(fetchOnline, onDeviceParamsUpdated) {
       obj.loading = false;
       if (xhr.status >= 200 && xhr.status <= 299) {
         // Success.
-        console.log('Successfully loaded online DPDB.');
         obj.dpdb = JSON.parse(xhr.response);
         obj.recalculateDeviceParams_();
       } else {
@@ -3640,10 +3898,7 @@ Dpdb.prototype.getDeviceParams = function() {
 
 // Recalculates this device's parameters based on the DPDB.
 Dpdb.prototype.recalculateDeviceParams_ = function() {
-  console.log('Recalculating device params.');
   var newDeviceParams = this.calcDeviceParams_();
-  console.log('New device parameters:');
-  console.log(newDeviceParams);
   if (newDeviceParams) {
     this.deviceParams = newDeviceParams;
     // Invoke callback, if it is set.
@@ -3677,9 +3932,6 @@ Dpdb.prototype.calcDeviceParams_ = function() {
   var userAgent = navigator.userAgent || navigator.vendor || window.opera;
   var width = Util.getScreenWidth();
   var height = Util.getScreenHeight();
-  console.log('User agent: ' + userAgent);
-  console.log('Pixel width: ' + width);
-  console.log('Pixel height: ' + height);
 
   if (!db.devices) {
     console.error('DPDB has no devices section.');
@@ -3706,8 +3958,6 @@ Dpdb.prototype.calcDeviceParams_ = function() {
     for (var j = 0; j < device.rules.length; j++) {
       var rule = device.rules[j];
       if (this.matchRule_(rule, userAgent, width, height)) {
-        console.log('Rule matched:');
-        console.log(rule);
         matched = true;
         break;
       }
@@ -3758,51 +4008,8 @@ function DeviceParams(params) {
 }
 
 module.exports = Dpdb;
-},{"../util.js":22,"./dpdb-cache.js":10}],12:[function(_dereq_,module,exports){
-/*
- * Copyright 2015 Google Inc. All Rights Reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
-function Emitter() {
-  this.callbacks = {};
-}
-
-Emitter.prototype.emit = function(eventName) {
-  var callbacks = this.callbacks[eventName];
-  if (!callbacks) {
-    //console.log('No valid callback specified.');
-    return;
-  }
-  var args = [].slice.call(arguments);
-  // Eliminate the first param (the callback).
-  args.shift();
-  for (var i = 0; i < callbacks.length; i++) {
-    callbacks[i].apply(this, args);
-  }
-};
-
-Emitter.prototype.on = function(eventName, callback) {
-  if (eventName in this.callbacks) {
-    this.callbacks[eventName].push(callback);
-  } else {
-    this.callbacks[eventName] = [callback];
-  }
-};
-
-module.exports = Emitter;
-
-},{}],13:[function(_dereq_,module,exports){
+},{"../util.js":22,"./dpdb-cache.js":11}],13:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -3822,61 +4029,66 @@ var WebVRPolyfill = _dereq_('./webvr-polyfill.js').WebVRPolyfill;
 
 // Initialize a WebVRConfig just in case.
 window.WebVRConfig = Util.extend({
-	// Forces availability of VR mode, even for non-mobile devices.
-	FORCE_ENABLE_VR: false,
+  // Forces availability of VR mode, even for non-mobile devices.
+  FORCE_ENABLE_VR: false,
 
-	// Complementary filter coefficient. 0 for accelerometer, 1 for gyro.
-	K_FILTER: 0.98,
+  // Complementary filter coefficient. 0 for accelerometer, 1 for gyro.
+  K_FILTER: 0.98,
 
-	// How far into the future to predict during fast motion (in seconds).
-	PREDICTION_TIME_S: 0.040,
+  // How far into the future to predict during fast motion (in seconds).
+  PREDICTION_TIME_S: 0.040,
 
-	// Flag to enable touch panner. In case you have your own touch controls.
-	TOUCH_PANNER_DISABLED: true,
+  // Flag to enable touch panner. In case you have your own touch controls.
+  TOUCH_PANNER_DISABLED: true,
 
-	// Flag to disabled the UI in VR Mode.
-	CARDBOARD_UI_DISABLED: false, // Default: false
+  // Flag to disabled the UI in VR Mode.
+  CARDBOARD_UI_DISABLED: false, // Default: false
 
-	// Flag to disable the instructions to rotate your device.
-	ROTATE_INSTRUCTIONS_DISABLED: false, // Default: false.
+  // Flag to disable the instructions to rotate your device.
+  ROTATE_INSTRUCTIONS_DISABLED: false, // Default: false.
 
-	// Enable yaw panning only, disabling roll and pitch. This can be useful
-	// for panoramas with nothing interesting above or below.
-	YAW_ONLY: false,
+  // Enable yaw panning only, disabling roll and pitch. This can be useful
+  // for panoramas with nothing interesting above or below.
+  YAW_ONLY: false,
 
-	// To disable keyboard and mouse controls, if you want to use your own
-	// implementation.
-	MOUSE_KEYBOARD_CONTROLS_DISABLED: false,
+  // To disable keyboard and mouse controls, if you want to use your own
+  // implementation.
+  MOUSE_KEYBOARD_CONTROLS_DISABLED: false,
 
-	// Prevent the polyfill from initializing immediately. Requires the app
-	// to call InitializeWebVRPolyfill() before it can be used.
-	DEFER_INITIALIZATION: false,
+  // Prevent the polyfill from initializing immediately. Requires the app
+  // to call InitializeWebVRPolyfill() before it can be used.
+  DEFER_INITIALIZATION: false,
 
-	// Enable the deprecated version of the API (navigator.getVRDevices).
-	ENABLE_DEPRECATED_API: false,
+  // Enable the deprecated version of the API (navigator.getVRDevices).
+  ENABLE_DEPRECATED_API: false,
 
-	// Scales the recommended buffer size reported by WebVR, which can improve
-	// performance.
-	// UPDATE(2016-05-03): Setting this to 0.5 by default since 1.0 does not
-	// perform well on many mobile devices.
-	BUFFER_SCALE: 0.5,
+  // Scales the recommended buffer size reported by WebVR, which can improve
+  // performance.
+  // UPDATE(2016-05-03): Setting this to 0.5 by default since 1.0 does not
+  // perform well on many mobile devices.
+  BUFFER_SCALE: 0.5,
 
-	// Allow VRDisplay.submitFrame to change gl bindings, which is more
-	// efficient if the application code will re-bind its resources on the
-	// next frame anyway. This has been seen to cause rendering glitches with
-	// THREE.js.
-	// Dirty bindings include: gl.FRAMEBUFFER_BINDING, gl.CURRENT_PROGRAM,
-	// gl.ARRAY_BUFFER_BINDING, gl.ELEMENT_ARRAY_BUFFER_BINDING,
-	// and gl.TEXTURE_BINDING_2D for texture unit 0.
-	DIRTY_SUBMIT_FRAME_BINDINGS: false
+  // Allow VRDisplay.submitFrame to change gl bindings, which is more
+  // efficient if the application code will re-bind its resources on the
+  // next frame anyway. This has been seen to cause rendering glitches with
+  // THREE.js.
+  // Dirty bindings include: gl.FRAMEBUFFER_BINDING, gl.CURRENT_PROGRAM,
+  // gl.ARRAY_BUFFER_BINDING, gl.ELEMENT_ARRAY_BUFFER_BINDING,
+  // and gl.TEXTURE_BINDING_2D for texture unit 0.
+  DIRTY_SUBMIT_FRAME_BINDINGS: false,
+
+  // When set to true, this will cause a polyfilled VRDisplay to always be
+  // appended to the list returned by navigator.getVRDisplays(), even if that
+  // list includes a native VRDisplay.
+  ALWAYS_APPEND_POLYFILL_DISPLAY: false
 }, window.WebVRConfig);
 
 if (!window.WebVRConfig.DEFER_INITIALIZATION) {
-	new WebVRPolyfill();
+  new WebVRPolyfill();
 } else {
-	window.InitializeWebVRPolyfill = function () {
-		new WebVRPolyfill();
-	}
+  window.InitializeWebVRPolyfill = function() {
+    new WebVRPolyfill();
+  }
 }
 
 },{"./util.js":22,"./webvr-polyfill.js":25}],14:[function(_dereq_,module,exports){
@@ -4417,7 +4629,7 @@ MouseKeyboardVRDisplay.prototype.resetPose = function() {
 
 module.exports = MouseKeyboardVRDisplay;
 
-},{"./base.js":2,"./math-util.js":14,"./util.js":22}],16:[function(_dereq_,module,exports){
+},{"./base.js":3,"./math-util.js":14,"./util.js":22}],16:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -4445,7 +4657,7 @@ function RotateInstructions() {
   s.right = 0;
   s.bottom = 0;
   s.left = 0;
-  s.backgroundColor = '#000000';
+  s.backgroundColor = 'gray';
   s.fontFamily = 'sans-serif';
   // Force this to be above the fullscreen canvas, which is at zIndex: 999999.
   s.zIndex = 1000000;
@@ -4470,7 +4682,7 @@ function RotateInstructions() {
 
   var snackbar = document.createElement('div');
   var s = snackbar.style;
-  s.backgroundColor = '#1E1E20';
+  s.backgroundColor = '#CFD8DC';
   s.position = 'fixed';
   s.bottom = 0;
   s.width = '100%';
@@ -4482,7 +4694,6 @@ function RotateInstructions() {
 
   var snackbarText = document.createElement('div');
   snackbarText.style.float = 'left';
-  snackbarText.style.color = '#33DEFF';
   snackbarText.innerHTML = 'No Cardboard viewer?';
 
   var snackbarButton = document.createElement('a');
@@ -4493,10 +4704,10 @@ function RotateInstructions() {
   s.float = 'right';
   s.fontWeight = 600;
   s.textTransform = 'uppercase';
-  s.borderLeft = '1px solid #33DEFF';
+  s.borderLeft = '1px solid gray';
   s.paddingLeft = '24px';
   s.textDecoration = 'none';
-  s.color = '#33DEFF';
+  s.color = '#656A6B';
 
   snackbar.appendChild(snackbarText);
   snackbar.appendChild(snackbarButton);
@@ -4559,7 +4770,7 @@ RotateInstructions.prototype.update = function() {
 
 RotateInstructions.prototype.loadIcon_ = function() {
   // Encoded asset_src/rotate-instructions.svg
-  this.icon = Util.base64('image/svg+xml', 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz48c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zOnNrZXRjaD0iaHR0cDovL3d3dy5ib2hlbWlhbmNvZGluZy5jb20vc2tldGNoL25zIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIgdmlld0JveD0iMCAwIDE5OCAxODMuOSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgMTk4IDE4My45OyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+PHN0eWxlIHR5cGU9InRleHQvY3NzIj4uc3Qwe2ZpbGw6IzMzREVGRjt9PC9zdHlsZT48dGl0bGU+dHJhbnNpdGlvbjwvdGl0bGU+PGRlc2M+Q3JlYXRlZCB3aXRoIFNrZXRjaC48L2Rlc2M+PGc+PHBvbHlnb24gY2xhc3M9InN0MCIgcG9pbnRzPSI2Mi40LDg0LjQgODkuNyw2OC43IDkxLjEsNjcuOSAxMjEuMyw1MC41IDEyMS41LDUwLjQgMTIyLjksNDkuNSAxMjMsNDkuNSAxMjMsMTEuNyAxMjEuNSwxMi42IDEyMS41LDEyLjcgMTIxLjUsMTIuOCAxMjEuMywxMyAxMjEuMywxMi44IDEyMS4zLDEyLjcgNjAuOCw0Ny41IDYwLjgsNDcuNSA2MC44LDY2LjggNjAuOCw2Ny44IDYwLjgsODAuMyA2MC44LDgyLjEgNjAuOCw4NS4zIDYxLjQsODUgIi8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTEwNy4yLDg5LjdjMS43LDEsMy45LDEuNSw2LjIsMS41aDBjMi40LDAsNC42LTAuNSw2LjMtMS41bDEyLjItNy4xYzEuOC0xLDIuNy0yLjQsMi43LTMuOWMwLTEuNS0xLTIuOC0yLjctMy44Yy0xLjctMS0zLjktMS41LTYuMi0xLjVjLTIuNCwwLTQuNiwwLjUtNi4zLDEuNUwxMDcuMyw4MmMtMS44LDEtMi43LDIuNC0yLjcsMy45QzEwNC41LDg3LjMsMTA1LjUsODguNywxMDcuMiw4OS43eiBNMTMxLjcsNzUuNWMxLjUsMC45LDIuMywyLDIuMywzLjJjMCwxLjItMC44LDIuNC0yLjQsMy4yTDExOS40LDg5Yy0xLjYsMC45LTMuNywxLjQtNiwxLjRjLTIuMiwwLTQuMy0wLjUtNS45LTEuNGMtMS41LTAuOS0yLjMtMi0yLjMtMy4yYzAtMS4yLDAuOC0yLjQsMi40LTMuMmwxMi4yLTcuMWMxLjYtMC45LDMuNy0xLjQsNi0xLjRDMTI4LDc0LjEsMTMwLjEsNzQuNiwxMzEuNyw3NS41eiIvPjxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0xNDIuMSwxMjEuNmMxLjEsMS41LDIuNywyLjMsNC41LDIuM2MxLjQsMCwzLjEtMC41LDQuNy0xLjRjMy0xLjcsNS43LTQuOSw3LjYtOC4zYzAtMC4xLDAuMS0wLjEsMC4xLTAuMmMxLjUtMi45LDIuNS02LjEsMi41LTljMC0zLTEtNS4zLTIuNy02LjVjMCwwLDAsMCwwLDBjLTItMS40LTQuOC0xLjMtNy44LDAuNGMwLDAtMC4xLDAtMC4xLDAuMWMwLDAtMC4xLDAtMC4xLDAuMWMtNS42LDMuMy0xMC4xLDExLjEtMTAuMSwxNy41QzE0MC42LDExOC41LDE0MS4xLDEyMC4zLDE0Mi4xLDEyMS42TDE0Mi4xLDEyMS42eiBNMTUwLjcsMTAwLjJjMC4xLTAuMSwwLjItMC4xLDAuMi0wLjJjMC4xLTAuMSwwLjItMC4yLDAuNC0wLjNjMi42LTEuNSw1LjEtMS43LDYuOC0wLjVsMCwwYzEuNSwxLjEsMi4zLDMuMSwyLjMsNS43YzAsMi43LTAuOSw1LjctMi4zLDguNWMwLDAuMS0wLjEsMC4xLTAuMSwwLjJjLTEuOCwzLjMtNC4zLDYuMy03LjIsOGMtMy4zLDEuOS02LjMsMS43LTcuOS0wLjZsMCwwbDAsMGMtMC44LTEuMS0xLjItMi43LTEuMi00LjZDMTQxLjYsMTEwLjUsMTQ1LjYsMTAzLjQsMTUwLjcsMTAwLjJ6Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTE1MS44LDExNi44bDAuNC0wLjJjMC44LTEsMS42LTIuMSwyLjMtMy4zYzAuMy0wLjQsMC41LTAuOSwwLjctMS40YzAtMC4xLDAuMS0wLjEsMC4xLTAuMmMwLjUtMSwwLjktMiwxLjMtM2MwLjEtMC4zLTAuMS0wLjYtMC4zLTAuNmMtMC4zLTAuMS0wLjYsMC4xLTAuNiwwLjNjLTAuMywxLTAuNywxLjktMS4yLDIuOGMwLDAuMS0wLjEsMC4xLTAuMSwwLjJjLTAuMiwwLjUtMC40LDAuOS0wLjcsMS40Yy0wLjYsMS4xLTEuNCwyLjItMi4yLDMuMWMtMC4yLDAuMi0wLjEsMC41LDAuMSwwLjdMMTUxLjgsMTE2Ljh6Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTEyMS4xLDEyOC4yYzAuMS0wLjMtMC4xLTAuNi0wLjMtMC42Yy0wLjMtMC4xLTAuNiwwLjEtMC42LDAuM2MtMC41LDEuNS0xLjIsMy0yLDQuNGMtMC42LDEuMS0xLjQsMi4yLTIuMiwzLjFjLTAuMiwwLjItMC4xLDAuNSwwLjEsMC43bDAuMywwLjFsMC40LTAuMmMwLjgtMSwxLjYtMi4xLDIuMy0zLjNDMTE5LjksMTMxLjMsMTIwLjYsMTI5LjgsMTIxLjEsMTI4LjJ6Ii8+PHBhdGggY2xhc3M9InN0MCIgZD0iTTU3LjcsODIuNWMwLDAtMC4xLDAtMC4xLDBjLTAuMSwwLTAuMiwwLTAuMiwwLjFjLTAuMSwwLTAuMiwwLTAuNCwwLjFjLTAuMiwwLjEtMC40LDAuMy0wLjUsMC41Yy0wLjMsMC4zLTAuNCwwLjgtMC40LDEuMmMwLDAuOCwwLjUsMS4zLDEuMywxLjNjMCwwLDAsMCwwLjEsMGMwLjEsMCwwLjIsMCwwLjItMC4xYzAuMSwwLDAuMywwLDAuNC0wLjFjMC4yLTAuMSwwLjMtMC4yLDAuNS0wLjRjMC4zLTAuNCwwLjUtMC44LDAuNS0xLjNDNTksODMuMSw1OC41LDgyLjUsNTcuNyw4Mi41eiBNNTcuNyw4NC40YzAsMC0wLjEsMC4xLTAuMSwwLjFjMCwwLTAuMSwwLjEtMC4xLDAuMWwtMC4xLDBsLTAuMSwwYzAsMCwwLDAtMC4xLDBjMCwwLDAsMC0wLjEsMGMtMC4xLTAuMS0wLjEtMC4xLTAuMS0wLjNjMCwwLDAsMCwwLDBjMC0wLjIsMC4xLTAuNCwwLjMtMC42YzAsMCwwLDAsMCwwYzAtMC4xLDAuMS0wLjEsMC4xLTAuMmMwLDAsMCwwLDAsMGwwLjEsMGwwLjEsMGMwLDAsMCwwLDAuMSwwYzAsMCwwLDAsMC4xLDBjMC4xLDAuMSwwLjEsMC4xLDAuMSwwLjNjMCwwLjEsMCwwLjItMC4xLDAuMmMwLDAuMSwwLDAuMS0wLjEsMC4yQzU3LjgsODQuMyw1Ny44LDg0LjMsNTcuNyw4NC40eiIvPjxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik01NS4xLDY5LjVDNTUuMSw2OS41LDU1LjEsNjkuNSw1NS4xLDY5LjVMNTUuMSw2OS41YzAsMC4xLDAuMSwwLjEsMC4xLDAuMmMwLDAsMCwwLjEsMC4xLDAuMWMwLjIsMC4zLDAuNSwwLjQsMC45LDAuNWMwLjEsMCwwLjEsMCwwLjIsMGMwLjMsMCwwLjYtMC4xLDAuOS0wLjNjMCwwLDAsMCwwLjEsMGMwLjEtMC4xLDAuMi0wLjEsMC4yLTAuMmMwLjItMC4yLDAuNS0wLjQsMC42LTAuN2MwLjMtMC40LDAuNC0wLjksMC40LTEuNGMwLDAsMCwwLDAsMGMwLTAuNy0wLjQtMS4zLTEtMS41Yy0wLjEsMC0wLjIsMC0wLjIsMGMtMC4xLDAtMC4xLDAtMC4yLDBjLTAuMywwLTAuNiwwLjEtMC45LDAuM2MtMC41LDAuMy0xLDAuOS0xLjIsMS41YzAsMC4xLTAuMSwwLjItMC4xLDAuNGwwLDBjMCwwLDAsMCwwLDB2MGMwLDAuMS0wLjEsMC4zLTAuMSwwLjRDNTUsNjguOSw1NSw2OS4zLDU1LjEsNjkuNUw1NS4xLDY5LjV6IE01Ni44LDY3LjNDNTYuOCw2Ny4zLDU2LjgsNjcuMyw1Ni44LDY3LjNjMC4xLTAuMSwwLjItMC4xLDAuNC0wLjFjMCwwLDAsMCwwLjEsMGMwLjEsMCwwLjEsMCwwLjEsMGMwLDAsMC4xLDAuMSwwLjEsMC4xYzAsMCwwLDAsMC4xLDAuMWMwLDAuMSwwLjEsMC4yLDAuMSwwLjNWNjhjMCwwLjEtMC4xLDAuMy0wLjEsMC40bC0wLjEsMC4yYy0wLjIsMC4yLTAuMywwLjUtMC42LDAuNmMwLDAsMCwwLDAsMGMtMC4xLDAuMS0wLjIsMC4xLTAuMywwLjFjMCwwLDAsMC0wLjEsMGMtMC4xLDAtMC4yLDAtMC4yLTAuMWMwLDAsMCwwLDAsMGMwLDAsMCwwLTAuMS0wLjFDNTYsNjksNTYsNjguOSw1Niw2OC43YzAsMCwwLDAsMCwwQzU2LDY4LjIsNTYuMyw2Ny41LDU2LjgsNjcuM3oiLz48cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTk4LDc5LjNMMTk4LDc5LjNsLTAuMi0wLjVsLTI2LjMtMTUuMkgxNzFsLTIuNSwxLjVsLTkuOS01LjdjLTAuMi0wLjQtMC4zLTAuOS0wLjMtMS4zbDAtMC4zbDAtMC41di0wLjlsLTAuMy0wLjRsMCwwbDAsMGwtNi44LTMuOWgtMC41TDEwMyw3OS4zbC02LjQtMy43bC0xLjMtMi40bDM0LjEtMTkuN2MyLjYtMS41LDQuMi00LjUsNC45LTguOWMxLjItNy44LDEuNy0zMi40LTAuNC0zOS43Yy0wLjYtMi4xLTEuOC0zLjEtMi44LTMuN0wxMzAuNywxbC0yLTAuOGMtMC41LTAuMi0wLjktMC4zLTEuNC0wLjNsLTAuMiwwYy0xLjEsMC0yLjIsMC40LTMuNCwxLjFjLTAuMiwwLjEtMjguOSwxNi42LTQ5LjgsMjguNmwtNi44LDMuOWwtMC4yLDBjLTAuOSwwLTEuOCwwLjItMi41LDAuNmwtNS43LDMuM2MtMC44LDAuNS0xLjQsMS4xLTEuOCwxLjlsLTQuNywyLjdjLTAuOSwwLjUtMy43LDIuNS00LjYsNy44bDAsMC4yYzAsMC4zLTAuOSw3LTAuOSwxOS4zYzAsMS45LDAsMy43LDAsNS4yTDIuNCwxMDAuMmMtMi4yLDEuMy0zLjEsNC0xLjksNi4xTDExLDEyNS40bDAsMGMwLDAsMCwwLDAsMGwwLDBsMC4yLDAuMmw0Ny4zLDI3LjNjMS4zLDAuNywyLjksMS4yLDQuNywxLjRjMC43LDAuMSwxLjMsMC4xLDIsMGwwLjMsMGwwLjMsMGMwLjUsMCwxLDAuMSwxLjQsMC4zdjAuN2MwLDAuNiwwLjIsMS4yLDAuNSwxLjdjMC4yLDAuMywwLjMsMC42LDAuNSwwLjhjMC4zLDAuNCwwLjYsMC43LDEsMC45bDQzLjIsMjQuOWMwLjIsMC4xLDAuNSwwLjIsMC43LDAuM2MwLjEsMCwwLjIsMCwwLjMsMGMwLjIsMCwwLjQsMCwwLjYtMC4xYzAuMSwwLDAuMS0wLjEsMC4yLTAuMWMwLjEtMC4xLDAuMi0wLjEsMC4zLTAuMmMwLDAsMCwwLDAsMGMwLjEtMC4xLDAuMS0wLjIsMC4xLTAuM2MwLTAuMSwwLjEtMC4yLDAuMS0wLjNjMC4xLTAuMiwwLjEtMC40LDAuMS0wLjdjMCwwLDAsMCwwLDB2LTI3LjdsNy44LTQuNWwwLjEtMC4xbDAuMS0wLjJsMy4yLTEwLjlsMS44LTZjNSwwLjksOS45LDIsMTQuNSwzLjVsMC44LDEuMmMwLDAuMSwwLjEsMC4xLDAuMiwwLjFsMC4xLDAuMWwwLDBsMC40LDBsMCwwbDI3LjYtMTUuOWwyNC4xLDEzLjljMC40LDAuMiwwLjcsMC4zLDEsMC4zYzAuNywwLDEuNS0wLjUsMS41LTEuN0wxOTgsNzkuM0wxOTgsNzkuM3ogTTE1OS42LDYxLjFsNy43LDQuNWwtMS43LDFsLTAuNCwwLjJsLTAuMiwwLjFsLTAuNCwwLjJsLTEuNywxYy0xLjQsMC44LTMuMywxLjMtNS4zLDEuM2MtMiwwLTMuOS0wLjQtNS4zLTEuMmMtMS4yLTAuNy0xLjktMS42LTEuOS0yLjVjMC0wLjksMC43LTEuOCwxLjktMi41bDUuMy0zLjFsMCwwbDAuNiwwLjNsMC40LDAuM0wxNTkuNiw2MS4xeiBNMTI3LDEzMi4xQzEyNywxMzIuMSwxMjcsMTMyLjIsMTI3LDEzMi4xbC0yLjYsOC43bC0yLjUsOC40bC03LjEsNC4xdi05LjhjMC4xLTAuMSwwLjItMC4xLDAuMy0wLjJjNS42LTMuMiwxMC4yLTExLjEsMTAuMi0xNy41YzAtMy0xLTUuMy0yLjctNi41YzAsMCwwLDAsMCwwYy0xLjUtMS4xLTMuNi0xLjMtNS43LTAuNWMtMC41LTMtMC4yLTYuMSwxLTljNC4zLTEwLjYsMTYuNi0xOS42LDMyLjktMjQuN2MwLjEsMCwwLjIsMCwwLjItMC4xYzUtMS41LDEwLjMtMi43LDE1LjktMy41YzEuMy0wLjIsMi43LTAuMyw0LTAuNHYzOS43djAuMmwtMC4xLDAuMWwtMjcsMTUuNmwtNi4zLTEzLjljLTAuNS0xLjEtMS40LTEuNy0yLjUtMS43Yy0xLjMsMC0yLjcsMC44LTQsMi4xYy0xLjEsMS4yLTIsMi43LTIuNSw0LjNMMTI3LDEzMi4xeiBNMTEzLjgsMTU0LjV2MC42djI3LjFjMCwwLjEsMCwwLjIsMCwwLjNjMCwwLDAsMC4xLDAsMC4xYzAsMC4xLDAsMC4xLTAuMSwwLjFjMCwwLDAsMC4xLTAuMSwwLjFsLTAuMywwLjFjLTAuMSwwLTAuMSwwLTAuMi0wLjFjLTAuMSwwLTAuMiwwLTAuMy0wLjFsLTI1LjktMTQuOWwtMTcuMy0xMGMtMC4xLDAtMC4xLTAuMS0wLjItMC4xYy0wLjctMC41LTEuMy0xLjYtMS4zLTIuNHYtMS4xbDAsMHYtNTNsMjUuOSwxNWwwLjUsMC4zbDAsMGwwLjUsMC4zbDE0LDguMWwwLjQsMC4zbDAuNCwwLjNsMy44LDIuMnY0LjF2MTEuMnYxLjF2OS45VjE1NC41eiBNMTAzLjEsODAuNWwwLjctMC40TDE1MC44LDUzbDEuNiwwLjlsNC4yLDIuNGwtOC45LDUuM2MtMiwxLjEtMywyLjctMyw0LjNjMCwxLjYsMS4xLDMuMiwzLDQuM2MxLjgsMS4xLDQuMywxLjcsNi45LDEuN2MyLjYsMCw1LjEtMC42LDctMS43bDQuNC0yLjVsMC4yLTAuMWw0LjgtMi44bDAuMS0wLjFsMC4xLTAuMWwwLDBsMjUuMiwxNC42bC0wLjEsMC4xbC0yLjIsMS4zYy0wLjUsMC4zLTEuNCwwLjQtMi4xLDAuM2MtNi41LTEuMS0xMy40LTEuNC0yMC4xLTAuOWMtMC4yLDAtMC4zLDAtMC41LDBjLTAuMiwwLTAuMywwLTAuNSwwYy0xLjQsMC4xLTIuOCwwLjItNC4xLDAuNGMtNS42LDAuOC0xMC45LDEuOS0xNS44LDMuNGMtMC4xLDAtMC4yLDAtMC4yLDAuMWMtMy4yLDEtNi4yLDItOSwzLjNjLTQuOSwyLjEtOS4zLDQuNy0xMy4xLDcuNWMtNS41LDQuMi05LjYsOS4yLTExLjgsMTQuNmMtMS4zLDMuMi0xLjYsNi41LTEsOS44YzAsMC4yLDAuMSwwLjMsMC4xLDAuNWMwLDAuMiwwLjEsMC4zLDAuMSwwLjVjMC4zLDEuNCwwLjgsMi44LDEuNSw0LjFjMC4yLDAuMy0wLjIsMC42LTAuNCwwLjdsLTIuOSwxLjdsLTMuNy0yLjFsLTAuNC0wLjNsLTAuNC0wLjNsLTEzLjEtNy42bC0xLjYtMC45bC0wLjUtMC4zbC0wLjUtMC4zbC0yNS41LTE0LjdMMTAzLjEsODAuNXogTTE1Ny43LDcwLjNDMTU3LjcsNzAuMywxNTcuNyw3MC4zLDE1Ny43LDcwLjNjMC40LDAsMC43LDAsMS4xLTAuMWMtMS4zLDAuNC0yLjcsMC42LTQuMiwwLjZjLTIuNCwwLTQuNy0wLjUtNi40LTEuNWMtMS42LTAuOS0yLjUtMi4xLTIuNS0zLjRjMC0xLjMsMC45LTIuNSwyLjUtMy40bDguOS01LjN2MGMwLDAuMiwwLDAuNCwwLDAuNmwwLDAuMmMwLDAuMywwLjEsMC42LDAuMiwwLjlsLTUuNSwzLjJjLTEuNiwwLjktMi40LDIuMS0yLjQsMy40YzAsMS4yLDAuOCwyLjQsMi40LDMuNGMwLjIsMC4xLDAuNSwwLjIsMC44LDAuNGMwLjIsMC4xLDAuMywwLjIsMC41LDAuMmMwLjMsMC4xLDAuNSwwLjIsMC44LDAuM2MwLjIsMC4xLDAuNCwwLjEsMC42LDAuMmMwLjQsMC4xLDAuNywwLjEsMS4xLDAuMmMwLjEsMCwwLjMsMC4xLDAuNCwwLjFjMC40LDAsMC44LDAuMSwxLjIsMC4xQzE1Ny40LDcwLjMsMTU3LjUsNzAuMywxNTcuNyw3MC4zeiBNMTE0LjgsMTMwLjJ2LTIuN2wyLjktMS43YzAuMi0wLjEsMC4zLTAuMiwwLjUtMC40bDAuNC0wLjZjMC4xLTAuNCwwLjEtMC44LTAuMS0xLjFjLTAuNy0xLjMtMS4yLTIuNy0xLjUtNC4xYzEuOS0wLjcsMy43LTAuNSw0LjksMC40bDAsMGMwLDAsMCwwLDAsMGMxLjUsMSwyLjMsMy4xLDIuMyw1LjdjMCw2LTQuMiwxMy40LTkuNSwxNi41VjEzMC4yeiBNMTcxLjksODFjNi43LTAuNSwxMy41LTAuMiwyMCwwLjljMSwwLjIsMi4xLDAsMi44LTAuNGwyLjQtMS40djU0LjJjMCwwLjMtMC4xLDAuNy0wLjUsMC43Yy0wLjIsMC0wLjMtMC4xLTAuNS0wLjJsLTI0LjEtMTMuOVY4MXogTTQ3LjgsOTAuMmMwLjMsMi4xLDEuNiwzLjUsMy4yLDQuNGwtNS43LDMuM2MtMS4xLDAuNi0yLjMsMS0zLjUsMWMtMi4zLDAtNC4zLTEuMS01LjMtM2MtMS42LTMtMC40LTcsMi44LTguOGw3LjctNC40QzQ3LjMsODUuOCw0Ny42LDg4LDQ3LjgsOTAuMnogTTU0LDg1LjNjLTAuMS0wLjctMC4xLTEuNS0wLjItMi40Yy0wLjEtMS4xLTAuMS0yLjQtMC4xLTMuOWMwLTAuMywwLTAuNywwLTFjMC0xLjgtMC4xLTMuOS0wLjEtNi4zYzAtMC40LDAtMC44LDAtMS4yYzAtMC4xLDAtMC4yLDAtMC4zYzAtMTIsMC44LTE4LjYsMC44LTE4LjZjMC42LTMuMywyLjEtNC4yLDIuMi00LjJjMCwwLDAuMy0wLjIsMC43LTAuNGMxLjYtMC45LDUuNi0zLjIsMTEtNi40YzE1LjEtOC43LDQwLjctMjMuNSw1Mi45LTMwLjVjMC4xLDAsMC4yLTAuMSwwLjItMC4xYzMuOS0yLjMsNi40LTMuNyw2LjUtMy43YzAuNS0wLjMsMC44LTAuMywxLTAuM2MwLjEsMCwwLjQsMCwwLjUsMC43YzEuNyw2LjEsMS40LDI5LjcsMC4yLDM3LjZjLTAuNCwyLjgtMS4zLDQuNi0yLjQsNS4zTDkzLDY5LjJsLTAuOSwwLjVsLTEzLjgsOEw2Miw4Ny4xbC0xLjQsMC44bDAsMEw2MCw4OC4zbC0wLjUsMC4zbC0xLjIsMC43bC0wLjksMC41bDAsMGwtMS45LDEuMWwtMC40LDAuMWgwYy0wLjIsMC0wLjUtMC4zLTAuNS0wLjVDNTQuNCw4OC45LDU0LjIsODcuNCw1NCw4NS4zQzU0LDg1LjMsNTQsODUuMyw1NCw4NS4zeiBNNTEuNiw1MC42YzAuNy0zLjksMi43LTQuOSwyLjctNC45czIuNC0xLjQsNi4zLTMuNnYwbDAsMGwwLDBsMC0wLjF2MGwwLTAuNmwwLjItMC4ybDAsMGw1LjctMy4zYzAuMS0wLjEsMC4zLTAuMSwwLjUtMC4xYzAuMiwwLDAuNCwwLDAuNSwwLjFjMCwwLDAsMCwwLDBsMC4zLDAuNGwwLDB2MGwwLjItMC40YzAuNS0wLjMsMS0wLjYsMS42LTAuOWMxNi4xLTkuMiw0MC41LTIzLjIsNTEuMS0yOS4zYzMuMi0xLjgsNS4yLTMsNS4yLTNjMC4xLTAuMSwwLjgtMC41LDEuNS0wLjVsMiwwLjhjMCwwLDAuMSwwLjEsMC4xLDAuMWMwLjEsMCwwLjIsMC4xLDAuMiwwLjFjLTAuMSwwLTAuMS0wLjEtMC4yLTAuMWwwLDBjMCwwLDAsMC0wLjEsMGMtMC4xLDAtMC4xLDAtMC4yLDBjLTAuMSwwLTAuMiwwLTAuMywwYy0wLjEsMC0wLjIsMC0wLjMsMGMtMC4xLDAtMC4xLDAtMC4yLDBjLTAuMSwwLTAuMiwwLjEtMC4zLDAuMWMtMC4xLDAtMC4xLDAtMC4yLDAuMWMtMC4xLDAtMC4xLDAuMS0wLjIsMC4xYy0wLjIsMC4xLTAuMywwLjItMC4zLDAuMmMtMC4xLDAuMS01LjgsMy40LTEzLjksOGMtMC41LDAuMy0xLDAuNi0xLjUsMC45Yy0xMS40LDYuNi0yNi45LDE1LjUtMzguNywyMi4zYzAsMCwwLDAtMC4xLDBjLTIuMSwxLjItNC4xLDIuNC01LjksMy40Yy0xLjksMS4xLTMuNSwyLTUsMi45Yy0wLjksMC41LTEuNywxLTIuNCwxLjRjLTIuMywxLjQtMy43LDIuMi0zLjcsMi4ycy0yLDEtMi43LDQuOWMwLDAtMC41LDQuMi0wLjgsMTJjLTAuMSwyLTAuMSw0LjMtMC4xLDYuOGMwLDAuMywwLDAuNiwwLDAuOWMwLDAuNCwwLDAuOCwwLDEuMmMwLDEuNSwwLDIuOCwwLDRjMCwwLjcsMCwxLjMsMCwxLjljMCwwLjQsMCwwLjcsMCwxLjFjMCwxLjUsMC4xLDIuOCwwLjIsNGMwLjEsMS44LDAuMiwzLjMsMC40LDQuNmMwLDAsMCwwLDAsMGMwLjEsMSwwLjMsMS44LDAuNCwyLjdjMC4xLDAuMywwLjIsMC42LDAuNSwwLjljMC4xLDAuMSwwLjIsMC4xLDAuMywwLjJjLTAuMy0wLjEtMC43LTAuMi0xLjEtMC40YzAsMC0wLjEsMC0wLjEsMGwwLDBjLTAuMSwwLTAuMi0wLjEtMC4zLTAuMWMtMC4xLDAtMC4xLTAuMS0wLjItMC4xYy0wLjEtMC4xLTAuMy0wLjItMC40LTAuM2MwLDAsMCwwLTAuMSwwYy0wLjEtMC4xLTAuMS0wLjEtMC4yLTAuMmMtMC4yLTAuMi0wLjMtMC41LTAuNC0wLjhjLTAuMi0xLjMtMC4zLTIuNi0wLjUtNC4yYy0wLjEtMS40LTAuMy0zLjEtMC40LTUuMmMwLTAuNCwwLTAuOC0wLjEtMS4xYy0wLjEtMS43LTAuMS0zLjUtMC4yLTUuOGMwLTAuNCwwLTAuOCwwLTEuMmMwLTAuOSwwLTEuOSwwLTIuOWMwLTEuMywwLTIuNSwwLTMuN0M1MC45LDU1LjksNTEuNiw1MC42LDUxLjYsNTAuNnogTTY1LjgsMTUzLjNjLTAuMiwwLTAuNCwwLTAuNiwwYy0wLjYsMC0xLjMsMC0xLjksMGMtMS42LTAuMS0zLjEtMC42LTQuMy0xLjJsLTQ2LjYtMjYuOWwzOC44LTIyLjR2LTEuMmwtMzkuNiwyMi45TDEuNCwxMDUuOGMtMC45LTEuNi0wLjItMy43LDEuNS00LjdsNDMuOC0yNS4zYzAuMSwyLjIsMC4xLDQuMSwwLjIsNS43bC04LjEsNC43Yy0zLjcsMi4xLTUuMSw2LjctMy4yLDEwLjJjMS4yLDIuMiwzLjUsMy42LDYuMiwzLjZjMS40LDAsMi44LTAuNCw0LTEuMWw1LjQtMy4xdi0xYzAuMywwLjIsMC42LDAuMywwLjksMC40YzAuNCwwLjIsMC44LDAuMywxLjIsMC40aDB2NC44djEuMnYxNy4zbDAsMGwtNi4yLTMuOWwwLDBsOC44LDI0LjFsMC4xLDAuMmw4LjMtMTQuNmwtNi44LTMuOVY5OS4xdi0xLjJ2LTIuOGMwLjEsMCwwLjItMC4xLDAuMy0wLjFsMS44LTFsMzQuOS0yMC4ybDEuMiwyLjFMNTkuNiw5Ni43djEuMmwzNi44LTIxLjJsNS43LDMuM0w2Ny4zLDk5LjlsLTAuMywwLjRsMCwwdjIzLjN2MC45djI5LjFDNjYuNywxNTMuNCw2Ni4yLDE1My4zLDY1LjgsMTUzLjN6IE0xMjguMiwxMzEuOWwxLjItNC4yYzAuNC0xLjQsMS4yLTIuOCwyLjMtMy45YzEuOS0yLDQuMS0yLjQsNC45LTAuN2w1LjUsMTIuMUMxMzcuNywxMzMuOCwxMzMsMTMyLjcsMTI4LjIsMTMxLjl6Ii8+PC9nPjwvc3ZnPg==');
+  this.icon = Util.base64('image/svg+xml', 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+Cjxzdmcgd2lkdGg9IjE5OHB4IiBoZWlnaHQ9IjI0MHB4IiB2aWV3Qm94PSIwIDAgMTk4IDI0MCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4bWxuczpza2V0Y2g9Imh0dHA6Ly93d3cuYm9oZW1pYW5jb2RpbmcuY29tL3NrZXRjaC9ucyI+CiAgICA8IS0tIEdlbmVyYXRvcjogU2tldGNoIDMuMy4zICgxMjA4MSkgLSBodHRwOi8vd3d3LmJvaGVtaWFuY29kaW5nLmNvbS9za2V0Y2ggLS0+CiAgICA8dGl0bGU+dHJhbnNpdGlvbjwvdGl0bGU+CiAgICA8ZGVzYz5DcmVhdGVkIHdpdGggU2tldGNoLjwvZGVzYz4KICAgIDxkZWZzPjwvZGVmcz4KICAgIDxnIGlkPSJQYWdlLTEiIHN0cm9rZT0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIiBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHNrZXRjaDp0eXBlPSJNU1BhZ2UiPgogICAgICAgIDxnIGlkPSJ0cmFuc2l0aW9uIiBza2V0Y2g6dHlwZT0iTVNBcnRib2FyZEdyb3VwIj4KICAgICAgICAgICAgPGcgaWQ9IkltcG9ydGVkLUxheWVycy1Db3B5LTQtKy1JbXBvcnRlZC1MYXllcnMtQ29weS0rLUltcG9ydGVkLUxheWVycy1Db3B5LTItQ29weSIgc2tldGNoOnR5cGU9Ik1TTGF5ZXJHcm91cCI+CiAgICAgICAgICAgICAgICA8ZyBpZD0iSW1wb3J0ZWQtTGF5ZXJzLUNvcHktNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMC4wMDAwMDAsIDEwNy4wMDAwMDApIiBza2V0Y2g6dHlwZT0iTVNTaGFwZUdyb3VwIj4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTQ5LjYyNSwyLjUyNyBDMTQ5LjYyNSwyLjUyNyAxNTUuODA1LDYuMDk2IDE1Ni4zNjIsNi40MTggTDE1Ni4zNjIsNy4zMDQgQzE1Ni4zNjIsNy40ODEgMTU2LjM3NSw3LjY2NCAxNTYuNCw3Ljg1MyBDMTU2LjQxLDcuOTM0IDE1Ni40Miw4LjAxNSAxNTYuNDI3LDguMDk1IEMxNTYuNTY3LDkuNTEgMTU3LjQwMSwxMS4wOTMgMTU4LjUzMiwxMi4wOTQgTDE2NC4yNTIsMTcuMTU2IEwxNjQuMzMzLDE3LjA2NiBDMTY0LjMzMywxNy4wNjYgMTY4LjcxNSwxNC41MzYgMTY5LjU2OCwxNC4wNDIgQzE3MS4wMjUsMTQuODgzIDE5NS41MzgsMjkuMDM1IDE5NS41MzgsMjkuMDM1IEwxOTUuNTM4LDgzLjAzNiBDMTk1LjUzOCw4My44MDcgMTk1LjE1Miw4NC4yNTMgMTk0LjU5LDg0LjI1MyBDMTk0LjM1Nyw4NC4yNTMgMTk0LjA5NSw4NC4xNzcgMTkzLjgxOCw4NC4wMTcgTDE2OS44NTEsNzAuMTc5IEwxNjkuODM3LDcwLjIwMyBMMTQyLjUxNSw4NS45NzggTDE0MS42NjUsODQuNjU1IEMxMzYuOTM0LDgzLjEyNiAxMzEuOTE3LDgxLjkxNSAxMjYuNzE0LDgxLjA0NSBDMTI2LjcwOSw4MS4wNiAxMjYuNzA3LDgxLjA2OSAxMjYuNzA3LDgxLjA2OSBMMTIxLjY0LDk4LjAzIEwxMTMuNzQ5LDEwMi41ODYgTDExMy43MTIsMTAyLjUyMyBMMTEzLjcxMiwxMzAuMTEzIEMxMTMuNzEyLDEzMC44ODUgMTEzLjMyNiwxMzEuMzMgMTEyLjc2NCwxMzEuMzMgQzExMi41MzIsMTMxLjMzIDExMi4yNjksMTMxLjI1NCAxMTEuOTkyLDEzMS4wOTQgTDY5LjUxOSwxMDYuNTcyIEM2OC41NjksMTA2LjAyMyA2Ny43OTksMTA0LjY5NSA2Ny43OTksMTAzLjYwNSBMNjcuNzk5LDEwMi41NyBMNjcuNzc4LDEwMi42MTcgQzY3LjI3LDEwMi4zOTMgNjYuNjQ4LDEwMi4yNDkgNjUuOTYyLDEwMi4yMTggQzY1Ljg3NSwxMDIuMjE0IDY1Ljc4OCwxMDIuMjEyIDY1LjcwMSwxMDIuMjEyIEM2NS42MDYsMTAyLjIxMiA2NS41MTEsMTAyLjIxNSA2NS40MTYsMTAyLjIxOSBDNjUuMTk1LDEwMi4yMjkgNjQuOTc0LDEwMi4yMzUgNjQuNzU0LDEwMi4yMzUgQzY0LjMzMSwxMDIuMjM1IDYzLjkxMSwxMDIuMjE2IDYzLjQ5OCwxMDIuMTc4IEM2MS44NDMsMTAyLjAyNSA2MC4yOTgsMTAxLjU3OCA1OS4wOTQsMTAwLjg4MiBMMTIuNTE4LDczLjk5MiBMMTIuNTIzLDc0LjAwNCBMMi4yNDUsNTUuMjU0IEMxLjI0NCw1My40MjcgMi4wMDQsNTEuMDM4IDMuOTQzLDQ5LjkxOCBMNTkuOTU0LDE3LjU3MyBDNjAuNjI2LDE3LjE4NSA2MS4zNSwxNy4wMDEgNjIuMDUzLDE3LjAwMSBDNjMuMzc5LDE3LjAwMSA2NC42MjUsMTcuNjYgNjUuMjgsMTguODU0IEw2NS4yODUsMTguODUxIEw2NS41MTIsMTkuMjY0IEw2NS41MDYsMTkuMjY4IEM2NS45MDksMjAuMDAzIDY2LjQwNSwyMC42OCA2Ni45ODMsMjEuMjg2IEw2Ny4yNiwyMS41NTYgQzY5LjE3NCwyMy40MDYgNzEuNzI4LDI0LjM1NyA3NC4zNzMsMjQuMzU3IEM3Ni4zMjIsMjQuMzU3IDc4LjMyMSwyMy44NCA4MC4xNDgsMjIuNzg1IEM4MC4xNjEsMjIuNzg1IDg3LjQ2NywxOC41NjYgODcuNDY3LDE4LjU2NiBDODguMTM5LDE4LjE3OCA4OC44NjMsMTcuOTk0IDg5LjU2NiwxNy45OTQgQzkwLjg5MiwxNy45OTQgOTIuMTM4LDE4LjY1MiA5Mi43OTIsMTkuODQ3IEw5Ni4wNDIsMjUuNzc1IEw5Ni4wNjQsMjUuNzU3IEwxMDIuODQ5LDI5LjY3NCBMMTAyLjc0NCwyOS40OTIgTDE0OS42MjUsMi41MjcgTTE0OS42MjUsMC44OTIgQzE0OS4zNDMsMC44OTIgMTQ5LjA2MiwwLjk2NSAxNDguODEsMS4xMSBMMTAyLjY0MSwyNy42NjYgTDk3LjIzMSwyNC41NDIgTDk0LjIyNiwxOS4wNjEgQzkzLjMxMywxNy4zOTQgOTEuNTI3LDE2LjM1OSA4OS41NjYsMTYuMzU4IEM4OC41NTUsMTYuMzU4IDg3LjU0NiwxNi42MzIgODYuNjQ5LDE3LjE1IEM4My44NzgsMTguNzUgNzkuNjg3LDIxLjE2OSA3OS4zNzQsMjEuMzQ1IEM3OS4zNTksMjEuMzUzIDc5LjM0NSwyMS4zNjEgNzkuMzMsMjEuMzY5IEM3Ny43OTgsMjIuMjU0IDc2LjA4NCwyMi43MjIgNzQuMzczLDIyLjcyMiBDNzIuMDgxLDIyLjcyMiA2OS45NTksMjEuODkgNjguMzk3LDIwLjM4IEw2OC4xNDUsMjAuMTM1IEM2Ny43MDYsMTkuNjcyIDY3LjMyMywxOS4xNTYgNjcuMDA2LDE4LjYwMSBDNjYuOTg4LDE4LjU1OSA2Ni45NjgsMTguNTE5IDY2Ljk0NiwxOC40NzkgTDY2LjcxOSwxOC4wNjUgQzY2LjY5LDE4LjAxMiA2Ni42NTgsMTcuOTYgNjYuNjI0LDE3LjkxMSBDNjUuNjg2LDE2LjMzNyA2My45NTEsMTUuMzY2IDYyLjA1MywxNS4zNjYgQzYxLjA0MiwxNS4zNjYgNjAuMDMzLDE1LjY0IDU5LjEzNiwxNi4xNTggTDMuMTI1LDQ4LjUwMiBDMC40MjYsNTAuMDYxIC0wLjYxMyw1My40NDIgMC44MTEsNTYuMDQgTDExLjA4OSw3NC43OSBDMTEuMjY2LDc1LjExMyAxMS41MzcsNzUuMzUzIDExLjg1LDc1LjQ5NCBMNTguMjc2LDEwMi4yOTggQzU5LjY3OSwxMDMuMTA4IDYxLjQzMywxMDMuNjMgNjMuMzQ4LDEwMy44MDYgQzYzLjgxMiwxMDMuODQ4IDY0LjI4NSwxMDMuODcgNjQuNzU0LDEwMy44NyBDNjUsMTAzLjg3IDY1LjI0OSwxMDMuODY0IDY1LjQ5NCwxMDMuODUyIEM2NS41NjMsMTAzLjg0OSA2NS42MzIsMTAzLjg0NyA2NS43MDEsMTAzLjg0NyBDNjUuNzY0LDEwMy44NDcgNjUuODI4LDEwMy44NDkgNjUuODksMTAzLjg1MiBDNjUuOTg2LDEwMy44NTYgNjYuMDgsMTAzLjg2MyA2Ni4xNzMsMTAzLjg3NCBDNjYuMjgyLDEwNS40NjcgNjcuMzMyLDEwNy4xOTcgNjguNzAyLDEwNy45ODggTDExMS4xNzQsMTMyLjUxIEMxMTEuNjk4LDEzMi44MTIgMTEyLjIzMiwxMzIuOTY1IDExMi43NjQsMTMyLjk2NSBDMTE0LjI2MSwxMzIuOTY1IDExNS4zNDcsMTMxLjc2NSAxMTUuMzQ3LDEzMC4xMTMgTDExNS4zNDcsMTAzLjU1MSBMMTIyLjQ1OCw5OS40NDYgQzEyMi44MTksOTkuMjM3IDEyMy4wODcsOTguODk4IDEyMy4yMDcsOTguNDk4IEwxMjcuODY1LDgyLjkwNSBDMTMyLjI3OSw4My43MDIgMTM2LjU1Nyw4NC43NTMgMTQwLjYwNyw4Ni4wMzMgTDE0MS4xNCw4Ni44NjIgQzE0MS40NTEsODcuMzQ2IDE0MS45NzcsODcuNjEzIDE0Mi41MTYsODcuNjEzIEMxNDIuNzk0LDg3LjYxMyAxNDMuMDc2LDg3LjU0MiAxNDMuMzMzLDg3LjM5MyBMMTY5Ljg2NSw3Mi4wNzYgTDE5Myw4NS40MzMgQzE5My41MjMsODUuNzM1IDE5NC4wNTgsODUuODg4IDE5NC41OSw4NS44ODggQzE5Ni4wODcsODUuODg4IDE5Ny4xNzMsODQuNjg5IDE5Ny4xNzMsODMuMDM2IEwxOTcuMTczLDI5LjAzNSBDMTk3LjE3MywyOC40NTEgMTk2Ljg2MSwyNy45MTEgMTk2LjM1NSwyNy42MTkgQzE5Ni4zNTUsMjcuNjE5IDE3MS44NDMsMTMuNDY3IDE3MC4zODUsMTIuNjI2IEMxNzAuMTMyLDEyLjQ4IDE2OS44NSwxMi40MDcgMTY5LjU2OCwxMi40MDcgQzE2OS4yODUsMTIuNDA3IDE2OS4wMDIsMTIuNDgxIDE2OC43NDksMTIuNjI3IEMxNjguMTQzLDEyLjk3OCAxNjUuNzU2LDE0LjM1NyAxNjQuNDI0LDE1LjEyNSBMMTU5LjYxNSwxMC44NyBDMTU4Ljc5NiwxMC4xNDUgMTU4LjE1NCw4LjkzNyAxNTguMDU0LDcuOTM0IEMxNTguMDQ1LDcuODM3IDE1OC4wMzQsNy43MzkgMTU4LjAyMSw3LjY0IEMxNTguMDA1LDcuNTIzIDE1Ny45OTgsNy40MSAxNTcuOTk4LDcuMzA0IEwxNTcuOTk4LDYuNDE4IEMxNTcuOTk4LDUuODM0IDE1Ny42ODYsNS4yOTUgMTU3LjE4MSw1LjAwMiBDMTU2LjYyNCw0LjY4IDE1MC40NDIsMS4xMTEgMTUwLjQ0MiwxLjExMSBDMTUwLjE4OSwwLjk2NSAxNDkuOTA3LDAuODkyIDE0OS42MjUsMC44OTIiIGlkPSJGaWxsLTEiIGZpbGw9IiM0NTVBNjQiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNOTYuMDI3LDI1LjYzNiBMMTQyLjYwMyw1Mi41MjcgQzE0My44MDcsNTMuMjIyIDE0NC41ODIsNTQuMTE0IDE0NC44NDUsNTUuMDY4IEwxNDQuODM1LDU1LjA3NSBMNjMuNDYxLDEwMi4wNTcgTDYzLjQ2LDEwMi4wNTcgQzYxLjgwNiwxMDEuOTA1IDYwLjI2MSwxMDEuNDU3IDU5LjA1NywxMDAuNzYyIEwxMi40ODEsNzMuODcxIEw5Ni4wMjcsMjUuNjM2IiBpZD0iRmlsbC0yIiBmaWxsPSIjRkFGQUZBIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTYzLjQ2MSwxMDIuMTc0IEM2My40NTMsMTAyLjE3NCA2My40NDYsMTAyLjE3NCA2My40MzksMTAyLjE3MiBDNjEuNzQ2LDEwMi4wMTYgNjAuMjExLDEwMS41NjMgNTguOTk4LDEwMC44NjMgTDEyLjQyMiw3My45NzMgQzEyLjM4Niw3My45NTIgMTIuMzY0LDczLjkxNCAxMi4zNjQsNzMuODcxIEMxMi4zNjQsNzMuODMgMTIuMzg2LDczLjc5MSAxMi40MjIsNzMuNzcgTDk1Ljk2OCwyNS41MzUgQzk2LjAwNCwyNS41MTQgOTYuMDQ5LDI1LjUxNCA5Ni4wODUsMjUuNTM1IEwxNDIuNjYxLDUyLjQyNiBDMTQzLjg4OCw1My4xMzQgMTQ0LjY4Miw1NC4wMzggMTQ0Ljk1Nyw1NS4wMzcgQzE0NC45Nyw1NS4wODMgMTQ0Ljk1Myw1NS4xMzMgMTQ0LjkxNSw1NS4xNjEgQzE0NC45MTEsNTUuMTY1IDE0NC44OTgsNTUuMTc0IDE0NC44OTQsNTUuMTc3IEw2My41MTksMTAyLjE1OCBDNjMuNTAxLDEwMi4xNjkgNjMuNDgxLDEwMi4xNzQgNjMuNDYxLDEwMi4xNzQgTDYzLjQ2MSwxMDIuMTc0IFogTTEyLjcxNCw3My44NzEgTDU5LjExNSwxMDAuNjYxIEM2MC4yOTMsMTAxLjM0MSA2MS43ODYsMTAxLjc4MiA2My40MzUsMTAxLjkzNyBMMTQ0LjcwNyw1NS4wMTUgQzE0NC40MjgsNTQuMTA4IDE0My42ODIsNTMuMjg1IDE0Mi41NDQsNTIuNjI4IEw5Ni4wMjcsMjUuNzcxIEwxMi43MTQsNzMuODcxIEwxMi43MTQsNzMuODcxIFoiIGlkPSJGaWxsLTMiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTQ4LjMyNyw1OC40NzEgQzE0OC4xNDUsNTguNDggMTQ3Ljk2Miw1OC40OCAxNDcuNzgxLDU4LjQ3MiBDMTQ1Ljg4Nyw1OC4zODkgMTQ0LjQ3OSw1Ny40MzQgMTQ0LjYzNiw1Ni4zNCBDMTQ0LjY4OSw1NS45NjcgMTQ0LjY2NCw1NS41OTcgMTQ0LjU2NCw1NS4yMzUgTDYzLjQ2MSwxMDIuMDU3IEM2NC4wODksMTAyLjExNSA2NC43MzMsMTAyLjEzIDY1LjM3OSwxMDIuMDk5IEM2NS41NjEsMTAyLjA5IDY1Ljc0MywxMDIuMDkgNjUuOTI1LDEwMi4wOTggQzY3LjgxOSwxMDIuMTgxIDY5LjIyNywxMDMuMTM2IDY5LjA3LDEwNC4yMyBMMTQ4LjMyNyw1OC40NzEiIGlkPSJGaWxsLTQiIGZpbGw9IiNGRkZGRkYiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNNjkuMDcsMTA0LjM0NyBDNjkuMDQ4LDEwNC4zNDcgNjkuMDI1LDEwNC4zNCA2OS4wMDUsMTA0LjMyNyBDNjguOTY4LDEwNC4zMDEgNjguOTQ4LDEwNC4yNTcgNjguOTU1LDEwNC4yMTMgQzY5LDEwMy44OTYgNjguODk4LDEwMy41NzYgNjguNjU4LDEwMy4yODggQzY4LjE1MywxMDIuNjc4IDY3LjEwMywxMDIuMjY2IDY1LjkyLDEwMi4yMTQgQzY1Ljc0MiwxMDIuMjA2IDY1LjU2MywxMDIuMjA3IDY1LjM4NSwxMDIuMjE1IEM2NC43NDIsMTAyLjI0NiA2NC4wODcsMTAyLjIzMiA2My40NSwxMDIuMTc0IEM2My4zOTksMTAyLjE2OSA2My4zNTgsMTAyLjEzMiA2My4zNDcsMTAyLjA4MiBDNjMuMzM2LDEwMi4wMzMgNjMuMzU4LDEwMS45ODEgNjMuNDAyLDEwMS45NTYgTDE0NC41MDYsNTUuMTM0IEMxNDQuNTM3LDU1LjExNiAxNDQuNTc1LDU1LjExMyAxNDQuNjA5LDU1LjEyNyBDMTQ0LjY0Miw1NS4xNDEgMTQ0LjY2OCw1NS4xNyAxNDQuNjc3LDU1LjIwNCBDMTQ0Ljc4MSw1NS41ODUgMTQ0LjgwNiw1NS45NzIgMTQ0Ljc1MSw1Ni4zNTcgQzE0NC43MDYsNTYuNjczIDE0NC44MDgsNTYuOTk0IDE0NS4wNDcsNTcuMjgyIEMxNDUuNTUzLDU3Ljg5MiAxNDYuNjAyLDU4LjMwMyAxNDcuNzg2LDU4LjM1NSBDMTQ3Ljk2NCw1OC4zNjMgMTQ4LjE0Myw1OC4zNjMgMTQ4LjMyMSw1OC4zNTQgQzE0OC4zNzcsNTguMzUyIDE0OC40MjQsNTguMzg3IDE0OC40MzksNTguNDM4IEMxNDguNDU0LDU4LjQ5IDE0OC40MzIsNTguNTQ1IDE0OC4zODUsNTguNTcyIEw2OS4xMjksMTA0LjMzMSBDNjkuMTExLDEwNC4zNDIgNjkuMDksMTA0LjM0NyA2OS4wNywxMDQuMzQ3IEw2OS4wNywxMDQuMzQ3IFogTTY1LjY2NSwxMDEuOTc1IEM2NS43NTQsMTAxLjk3NSA2NS44NDIsMTAxLjk3NyA2NS45MywxMDEuOTgxIEM2Ny4xOTYsMTAyLjAzNyA2OC4yODMsMTAyLjQ2OSA2OC44MzgsMTAzLjEzOSBDNjkuMDY1LDEwMy40MTMgNjkuMTg4LDEwMy43MTQgNjkuMTk4LDEwNC4wMjEgTDE0Ny44ODMsNTguNTkyIEMxNDcuODQ3LDU4LjU5MiAxNDcuODExLDU4LjU5MSAxNDcuNzc2LDU4LjU4OSBDMTQ2LjUwOSw1OC41MzMgMTQ1LjQyMiw1OC4xIDE0NC44NjcsNTcuNDMxIEMxNDQuNTg1LDU3LjA5MSAxNDQuNDY1LDU2LjcwNyAxNDQuNTIsNTYuMzI0IEMxNDQuNTYzLDU2LjAyMSAxNDQuNTUyLDU1LjcxNiAxNDQuNDg4LDU1LjQxNCBMNjMuODQ2LDEwMS45NyBDNjQuMzUzLDEwMi4wMDIgNjQuODY3LDEwMi4wMDYgNjUuMzc0LDEwMS45ODIgQzY1LjQ3MSwxMDEuOTc3IDY1LjU2OCwxMDEuOTc1IDY1LjY2NSwxMDEuOTc1IEw2NS42NjUsMTAxLjk3NSBaIiBpZD0iRmlsbC01IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTIuMjA4LDU1LjEzNCBDMS4yMDcsNTMuMzA3IDEuOTY3LDUwLjkxNyAzLjkwNiw0OS43OTcgTDU5LjkxNywxNy40NTMgQzYxLjg1NiwxNi4zMzMgNjQuMjQxLDE2LjkwNyA2NS4yNDMsMTguNzM0IEw2NS40NzUsMTkuMTQ0IEM2NS44NzIsMTkuODgyIDY2LjM2OCwyMC41NiA2Ni45NDUsMjEuMTY1IEw2Ny4yMjMsMjEuNDM1IEM3MC41NDgsMjQuNjQ5IDc1LjgwNiwyNS4xNTEgODAuMTExLDIyLjY2NSBMODcuNDMsMTguNDQ1IEM4OS4zNywxNy4zMjYgOTEuNzU0LDE3Ljg5OSA5Mi43NTUsMTkuNzI3IEw5Ni4wMDUsMjUuNjU1IEwxMi40ODYsNzMuODg0IEwyLjIwOCw1NS4xMzQgWiIgaWQ9IkZpbGwtNiIgZmlsbD0iI0ZBRkFGQSI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xMi40ODYsNzQuMDAxIEMxMi40NzYsNzQuMDAxIDEyLjQ2NSw3My45OTkgMTIuNDU1LDczLjk5NiBDMTIuNDI0LDczLjk4OCAxMi4zOTksNzMuOTY3IDEyLjM4NCw3My45NCBMMi4xMDYsNTUuMTkgQzEuMDc1LDUzLjMxIDEuODU3LDUwLjg0NSAzLjg0OCw0OS42OTYgTDU5Ljg1OCwxNy4zNTIgQzYwLjUyNSwxNi45NjcgNjEuMjcxLDE2Ljc2NCA2Mi4wMTYsMTYuNzY0IEM2My40MzEsMTYuNzY0IDY0LjY2NiwxNy40NjYgNjUuMzI3LDE4LjY0NiBDNjUuMzM3LDE4LjY1NCA2NS4zNDUsMTguNjYzIDY1LjM1MSwxOC42NzQgTDY1LjU3OCwxOS4wODggQzY1LjU4NCwxOS4xIDY1LjU4OSwxOS4xMTIgNjUuNTkxLDE5LjEyNiBDNjUuOTg1LDE5LjgzOCA2Ni40NjksMjAuNDk3IDY3LjAzLDIxLjA4NSBMNjcuMzA1LDIxLjM1MSBDNjkuMTUxLDIzLjEzNyA3MS42NDksMjQuMTIgNzQuMzM2LDI0LjEyIEM3Ni4zMTMsMjQuMTIgNzguMjksMjMuNTgyIDgwLjA1MywyMi41NjMgQzgwLjA2NCwyMi41NTcgODAuMDc2LDIyLjU1MyA4MC4wODgsMjIuNTUgTDg3LjM3MiwxOC4zNDQgQzg4LjAzOCwxNy45NTkgODguNzg0LDE3Ljc1NiA4OS41MjksMTcuNzU2IEM5MC45NTYsMTcuNzU2IDkyLjIwMSwxOC40NzIgOTIuODU4LDE5LjY3IEw5Ni4xMDcsMjUuNTk5IEM5Ni4xMzgsMjUuNjU0IDk2LjExOCwyNS43MjQgOTYuMDYzLDI1Ljc1NiBMMTIuNTQ1LDczLjk4NSBDMTIuNTI2LDczLjk5NiAxMi41MDYsNzQuMDAxIDEyLjQ4Niw3NC4wMDEgTDEyLjQ4Niw3NC4wMDEgWiBNNjIuMDE2LDE2Ljk5NyBDNjEuMzEyLDE2Ljk5NyA2MC42MDYsMTcuMTkgNTkuOTc1LDE3LjU1NCBMMy45NjUsNDkuODk5IEMyLjA4Myw1MC45ODUgMS4zNDEsNTMuMzA4IDIuMzEsNTUuMDc4IEwxMi41MzEsNzMuNzIzIEw5NS44NDgsMjUuNjExIEw5Mi42NTMsMTkuNzgyIEM5Mi4wMzgsMTguNjYgOTAuODcsMTcuOTkgODkuNTI5LDE3Ljk5IEM4OC44MjUsMTcuOTkgODguMTE5LDE4LjE4MiA4Ny40ODksMTguNTQ3IEw4MC4xNzIsMjIuNzcyIEM4MC4xNjEsMjIuNzc4IDgwLjE0OSwyMi43ODIgODAuMTM3LDIyLjc4NSBDNzguMzQ2LDIzLjgxMSA3Ni4zNDEsMjQuMzU0IDc0LjMzNiwyNC4zNTQgQzcxLjU4OCwyNC4zNTQgNjkuMDMzLDIzLjM0NyA2Ny4xNDIsMjEuNTE5IEw2Ni44NjQsMjEuMjQ5IEM2Ni4yNzcsMjAuNjM0IDY1Ljc3NCwxOS45NDcgNjUuMzY3LDE5LjIwMyBDNjUuMzYsMTkuMTkyIDY1LjM1NiwxOS4xNzkgNjUuMzU0LDE5LjE2NiBMNjUuMTYzLDE4LjgxOSBDNjUuMTU0LDE4LjgxMSA2NS4xNDYsMTguODAxIDY1LjE0LDE4Ljc5IEM2NC41MjUsMTcuNjY3IDYzLjM1NywxNi45OTcgNjIuMDE2LDE2Ljk5NyBMNjIuMDE2LDE2Ljk5NyBaIiBpZD0iRmlsbC03IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTQyLjQzNCw0OC44MDggTDQyLjQzNCw0OC44MDggQzM5LjkyNCw0OC44MDcgMzcuNzM3LDQ3LjU1IDM2LjU4Miw0NS40NDMgQzM0Ljc3MSw0Mi4xMzkgMzYuMTQ0LDM3LjgwOSAzOS42NDEsMzUuNzg5IEw1MS45MzIsMjguNjkxIEM1My4xMDMsMjguMDE1IDU0LjQxMywyNy42NTggNTUuNzIxLDI3LjY1OCBDNTguMjMxLDI3LjY1OCA2MC40MTgsMjguOTE2IDYxLjU3MywzMS4wMjMgQzYzLjM4NCwzNC4zMjcgNjIuMDEyLDM4LjY1NyA1OC41MTQsNDAuNjc3IEw0Ni4yMjMsNDcuNzc1IEM0NS4wNTMsNDguNDUgNDMuNzQyLDQ4LjgwOCA0Mi40MzQsNDguODA4IEw0Mi40MzQsNDguODA4IFogTTU1LjcyMSwyOC4xMjUgQzU0LjQ5NSwyOC4xMjUgNTMuMjY1LDI4LjQ2MSA1Mi4xNjYsMjkuMDk2IEwzOS44NzUsMzYuMTk0IEMzNi41OTYsMzguMDg3IDM1LjMwMiw0Mi4xMzYgMzYuOTkyLDQ1LjIxOCBDMzguMDYzLDQ3LjE3MyA0MC4wOTgsNDguMzQgNDIuNDM0LDQ4LjM0IEM0My42NjEsNDguMzQgNDQuODksNDguMDA1IDQ1Ljk5LDQ3LjM3IEw1OC4yODEsNDAuMjcyIEM2MS41NiwzOC4zNzkgNjIuODUzLDM0LjMzIDYxLjE2NCwzMS4yNDggQzYwLjA5MiwyOS4yOTMgNTguMDU4LDI4LjEyNSA1NS43MjEsMjguMTI1IEw1NS43MjEsMjguMTI1IFoiIGlkPSJGaWxsLTgiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTQ5LjU4OCwyLjQwNyBDMTQ5LjU4OCwyLjQwNyAxNTUuNzY4LDUuOTc1IDE1Ni4zMjUsNi4yOTcgTDE1Ni4zMjUsNy4xODQgQzE1Ni4zMjUsNy4zNiAxNTYuMzM4LDcuNTQ0IDE1Ni4zNjIsNy43MzMgQzE1Ni4zNzMsNy44MTQgMTU2LjM4Miw3Ljg5NCAxNTYuMzksNy45NzUgQzE1Ni41Myw5LjM5IDE1Ny4zNjMsMTAuOTczIDE1OC40OTUsMTEuOTc0IEwxNjUuODkxLDE4LjUxOSBDMTY2LjA2OCwxOC42NzUgMTY2LjI0OSwxOC44MTQgMTY2LjQzMiwxOC45MzQgQzE2OC4wMTEsMTkuOTc0IDE2OS4zODIsMTkuNCAxNjkuNDk0LDE3LjY1MiBDMTY5LjU0MywxNi44NjggMTY5LjU1MSwxNi4wNTcgMTY5LjUxNywxNS4yMjMgTDE2OS41MTQsMTUuMDYzIEwxNjkuNTE0LDEzLjkxMiBDMTcwLjc4LDE0LjY0MiAxOTUuNTAxLDI4LjkxNSAxOTUuNTAxLDI4LjkxNSBMMTk1LjUwMSw4Mi45MTUgQzE5NS41MDEsODQuMDA1IDE5NC43MzEsODQuNDQ1IDE5My43ODEsODMuODk3IEwxNTEuMzA4LDU5LjM3NCBDMTUwLjM1OCw1OC44MjYgMTQ5LjU4OCw1Ny40OTcgMTQ5LjU4OCw1Ni40MDggTDE0OS41ODgsMjIuMzc1IiBpZD0iRmlsbC05IiBmaWxsPSIjRkFGQUZBIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE5NC41NTMsODQuMjUgQzE5NC4yOTYsODQuMjUgMTk0LjAxMyw4NC4xNjUgMTkzLjcyMiw4My45OTcgTDE1MS4yNSw1OS40NzYgQzE1MC4yNjksNTguOTA5IDE0OS40NzEsNTcuNTMzIDE0OS40NzEsNTYuNDA4IEwxNDkuNDcxLDIyLjM3NSBMMTQ5LjcwNSwyMi4zNzUgTDE0OS43MDUsNTYuNDA4IEMxNDkuNzA1LDU3LjQ1OSAxNTAuNDUsNTguNzQ0IDE1MS4zNjYsNTkuMjc0IEwxOTMuODM5LDgzLjc5NSBDMTk0LjI2Myw4NC4wNCAxOTQuNjU1LDg0LjA4MyAxOTQuOTQyLDgzLjkxNyBDMTk1LjIyNyw4My43NTMgMTk1LjM4NCw4My4zOTcgMTk1LjM4NCw4Mi45MTUgTDE5NS4zODQsMjguOTgyIEMxOTQuMTAyLDI4LjI0MiAxNzIuMTA0LDE1LjU0MiAxNjkuNjMxLDE0LjExNCBMMTY5LjYzNCwxNS4yMiBDMTY5LjY2OCwxNi4wNTIgMTY5LjY2LDE2Ljg3NCAxNjkuNjEsMTcuNjU5IEMxNjkuNTU2LDE4LjUwMyAxNjkuMjE0LDE5LjEyMyAxNjguNjQ3LDE5LjQwNSBDMTY4LjAyOCwxOS43MTQgMTY3LjE5NywxOS41NzggMTY2LjM2NywxOS4wMzIgQzE2Ni4xODEsMTguOTA5IDE2NS45OTUsMTguNzY2IDE2NS44MTQsMTguNjA2IEwxNTguNDE3LDEyLjA2MiBDMTU3LjI1OSwxMS4wMzYgMTU2LjQxOCw5LjQzNyAxNTYuMjc0LDcuOTg2IEMxNTYuMjY2LDcuOTA3IDE1Ni4yNTcsNy44MjcgMTU2LjI0Nyw3Ljc0OCBDMTU2LjIyMSw3LjU1NSAxNTYuMjA5LDcuMzY1IDE1Ni4yMDksNy4xODQgTDE1Ni4yMDksNi4zNjQgQzE1NS4zNzUsNS44ODMgMTQ5LjUyOSwyLjUwOCAxNDkuNTI5LDIuNTA4IEwxNDkuNjQ2LDIuMzA2IEMxNDkuNjQ2LDIuMzA2IDE1NS44MjcsNS44NzQgMTU2LjM4NCw2LjE5NiBMMTU2LjQ0Miw2LjIzIEwxNTYuNDQyLDcuMTg0IEMxNTYuNDQyLDcuMzU1IDE1Ni40NTQsNy41MzUgMTU2LjQ3OCw3LjcxNyBDMTU2LjQ4OSw3LjggMTU2LjQ5OSw3Ljg4MiAxNTYuNTA3LDcuOTYzIEMxNTYuNjQ1LDkuMzU4IDE1Ny40NTUsMTAuODk4IDE1OC41NzIsMTEuODg2IEwxNjUuOTY5LDE4LjQzMSBDMTY2LjE0MiwxOC41ODQgMTY2LjMxOSwxOC43MiAxNjYuNDk2LDE4LjgzNyBDMTY3LjI1NCwxOS4zMzYgMTY4LDE5LjQ2NyAxNjguNTQzLDE5LjE5NiBDMTY5LjAzMywxOC45NTMgMTY5LjMyOSwxOC40MDEgMTY5LjM3NywxNy42NDUgQzE2OS40MjcsMTYuODY3IDE2OS40MzQsMTYuMDU0IDE2OS40MDEsMTUuMjI4IEwxNjkuMzk3LDE1LjA2NSBMMTY5LjM5NywxMy43MSBMMTY5LjU3MiwxMy44MSBDMTcwLjgzOSwxNC41NDEgMTk1LjU1OSwyOC44MTQgMTk1LjU1OSwyOC44MTQgTDE5NS42MTgsMjguODQ3IEwxOTUuNjE4LDgyLjkxNSBDMTk1LjYxOCw4My40ODQgMTk1LjQyLDgzLjkxMSAxOTUuMDU5LDg0LjExOSBDMTk0LjkwOCw4NC4yMDYgMTk0LjczNyw4NC4yNSAxOTQuNTUzLDg0LjI1IiBpZD0iRmlsbC0xMCIgZmlsbD0iIzYwN0Q4QiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xNDUuNjg1LDU2LjE2MSBMMTY5LjgsNzAuMDgzIEwxNDMuODIyLDg1LjA4MSBMMTQyLjM2LDg0Ljc3NCBDMTM1LjgyNiw4Mi42MDQgMTI4LjczMiw4MS4wNDYgMTIxLjM0MSw4MC4xNTggQzExNi45NzYsNzkuNjM0IDExMi42NzgsODEuMjU0IDExMS43NDMsODMuNzc4IEMxMTEuNTA2LDg0LjQxNCAxMTEuNTAzLDg1LjA3MSAxMTEuNzMyLDg1LjcwNiBDMTEzLjI3LDg5Ljk3MyAxMTUuOTY4LDk0LjA2OSAxMTkuNzI3LDk3Ljg0MSBMMTIwLjI1OSw5OC42ODYgQzEyMC4yNiw5OC42ODUgOTQuMjgyLDExMy42ODMgOTQuMjgyLDExMy42ODMgTDcwLjE2Nyw5OS43NjEgTDE0NS42ODUsNTYuMTYxIiBpZD0iRmlsbC0xMSIgZmlsbD0iI0ZGRkZGRiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik05NC4yODIsMTEzLjgxOCBMOTQuMjIzLDExMy43ODUgTDY5LjkzMyw5OS43NjEgTDcwLjEwOCw5OS42NiBMMTQ1LjY4NSw1Ni4wMjYgTDE0NS43NDMsNTYuMDU5IEwxNzAuMDMzLDcwLjA4MyBMMTQzLjg0Miw4NS4yMDUgTDE0My43OTcsODUuMTk1IEMxNDMuNzcyLDg1LjE5IDE0Mi4zMzYsODQuODg4IDE0Mi4zMzYsODQuODg4IEMxMzUuNzg3LDgyLjcxNCAxMjguNzIzLDgxLjE2MyAxMjEuMzI3LDgwLjI3NCBDMTIwLjc4OCw4MC4yMDkgMTIwLjIzNiw4MC4xNzcgMTE5LjY4OSw4MC4xNzcgQzExNS45MzEsODAuMTc3IDExMi42MzUsODEuNzA4IDExMS44NTIsODMuODE5IEMxMTEuNjI0LDg0LjQzMiAxMTEuNjIxLDg1LjA1MyAxMTEuODQyLDg1LjY2NyBDMTEzLjM3Nyw4OS45MjUgMTE2LjA1OCw5My45OTMgMTE5LjgxLDk3Ljc1OCBMMTE5LjgyNiw5Ny43NzkgTDEyMC4zNTIsOTguNjE0IEMxMjAuMzU0LDk4LjYxNyAxMjAuMzU2LDk4LjYyIDEyMC4zNTgsOTguNjI0IEwxMjAuNDIyLDk4LjcyNiBMMTIwLjMxNyw5OC43ODcgQzEyMC4yNjQsOTguODE4IDk0LjU5OSwxMTMuNjM1IDk0LjM0LDExMy43ODUgTDk0LjI4MiwxMTMuODE4IEw5NC4yODIsMTEzLjgxOCBaIE03MC40MDEsOTkuNzYxIEw5NC4yODIsMTEzLjU0OSBMMTE5LjA4NCw5OS4yMjkgQzExOS42Myw5OC45MTQgMTE5LjkzLDk4Ljc0IDEyMC4xMDEsOTguNjU0IEwxMTkuNjM1LDk3LjkxNCBDMTE1Ljg2NCw5NC4xMjcgMTEzLjE2OCw5MC4wMzMgMTExLjYyMiw4NS43NDYgQzExMS4zODIsODUuMDc5IDExMS4zODYsODQuNDA0IDExMS42MzMsODMuNzM4IEMxMTIuNDQ4LDgxLjUzOSAxMTUuODM2LDc5Ljk0MyAxMTkuNjg5LDc5Ljk0MyBDMTIwLjI0Niw3OS45NDMgMTIwLjgwNiw3OS45NzYgMTIxLjM1NSw4MC4wNDIgQzEyOC43NjcsODAuOTMzIDEzNS44NDYsODIuNDg3IDE0Mi4zOTYsODQuNjYzIEMxNDMuMjMyLDg0LjgzOCAxNDMuNjExLDg0LjkxNyAxNDMuNzg2LDg0Ljk2NyBMMTY5LjU2Niw3MC4wODMgTDE0NS42ODUsNTYuMjk1IEw3MC40MDEsOTkuNzYxIEw3MC40MDEsOTkuNzYxIFoiIGlkPSJGaWxsLTEyIiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE2Ny4yMywxOC45NzkgTDE2Ny4yMyw2OS44NSBMMTM5LjkwOSw4NS42MjMgTDEzMy40NDgsNzEuNDU2IEMxMzIuNTM4LDY5LjQ2IDEzMC4wMiw2OS43MTggMTI3LjgyNCw3Mi4wMyBDMTI2Ljc2OSw3My4xNCAxMjUuOTMxLDc0LjU4NSAxMjUuNDk0LDc2LjA0OCBMMTE5LjAzNCw5Ny42NzYgTDkxLjcxMiwxMTMuNDUgTDkxLjcxMiw2Mi41NzkgTDE2Ny4yMywxOC45NzkiIGlkPSJGaWxsLTEzIiBmaWxsPSIjRkZGRkZGIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTkxLjcxMiwxMTMuNTY3IEM5MS42OTIsMTEzLjU2NyA5MS42NzIsMTEzLjU2MSA5MS42NTMsMTEzLjU1MSBDOTEuNjE4LDExMy41MyA5MS41OTUsMTEzLjQ5MiA5MS41OTUsMTEzLjQ1IEw5MS41OTUsNjIuNTc5IEM5MS41OTUsNjIuNTM3IDkxLjYxOCw2Mi40OTkgOTEuNjUzLDYyLjQ3OCBMMTY3LjE3MiwxOC44NzggQzE2Ny4yMDgsMTguODU3IDE2Ny4yNTIsMTguODU3IDE2Ny4yODgsMTguODc4IEMxNjcuMzI0LDE4Ljg5OSAxNjcuMzQ3LDE4LjkzNyAxNjcuMzQ3LDE4Ljk3OSBMMTY3LjM0Nyw2OS44NSBDMTY3LjM0Nyw2OS44OTEgMTY3LjMyNCw2OS45MyAxNjcuMjg4LDY5Ljk1IEwxMzkuOTY3LDg1LjcyNSBDMTM5LjkzOSw4NS43NDEgMTM5LjkwNSw4NS43NDUgMTM5Ljg3Myw4NS43MzUgQzEzOS44NDIsODUuNzI1IDEzOS44MTYsODUuNzAyIDEzOS44MDIsODUuNjcyIEwxMzMuMzQyLDcxLjUwNCBDMTMyLjk2Nyw3MC42ODIgMTMyLjI4LDcwLjIyOSAxMzEuNDA4LDcwLjIyOSBDMTMwLjMxOSw3MC4yMjkgMTI5LjA0NCw3MC45MTUgMTI3LjkwOCw3Mi4xMSBDMTI2Ljg3NCw3My4yIDEyNi4wMzQsNzQuNjQ3IDEyNS42MDYsNzYuMDgyIEwxMTkuMTQ2LDk3LjcwOSBDMTE5LjEzNyw5Ny43MzggMTE5LjExOCw5Ny43NjIgMTE5LjA5Miw5Ny43NzcgTDkxLjc3LDExMy41NTEgQzkxLjc1MiwxMTMuNTYxIDkxLjczMiwxMTMuNTY3IDkxLjcxMiwxMTMuNTY3IEw5MS43MTIsMTEzLjU2NyBaIE05MS44MjksNjIuNjQ3IEw5MS44MjksMTEzLjI0OCBMMTE4LjkzNSw5Ny41OTggTDEyNS4zODIsNzYuMDE1IEMxMjUuODI3LDc0LjUyNSAxMjYuNjY0LDczLjA4MSAxMjcuNzM5LDcxLjk1IEMxMjguOTE5LDcwLjcwOCAxMzAuMjU2LDY5Ljk5NiAxMzEuNDA4LDY5Ljk5NiBDMTMyLjM3Nyw2OS45OTYgMTMzLjEzOSw3MC40OTcgMTMzLjU1NCw3MS40MDcgTDEzOS45NjEsODUuNDU4IEwxNjcuMTEzLDY5Ljc4MiBMMTY3LjExMywxOS4xODEgTDkxLjgyOSw2Mi42NDcgTDkxLjgyOSw2Mi42NDcgWiIgaWQ9IkZpbGwtMTQiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTY4LjU0MywxOS4yMTMgTDE2OC41NDMsNzAuMDgzIEwxNDEuMjIxLDg1Ljg1NyBMMTM0Ljc2MSw3MS42ODkgQzEzMy44NTEsNjkuNjk0IDEzMS4zMzMsNjkuOTUxIDEyOS4xMzcsNzIuMjYzIEMxMjguMDgyLDczLjM3NCAxMjcuMjQ0LDc0LjgxOSAxMjYuODA3LDc2LjI4MiBMMTIwLjM0Niw5Ny45MDkgTDkzLjAyNSwxMTMuNjgzIEw5My4wMjUsNjIuODEzIEwxNjguNTQzLDE5LjIxMyIgaWQ9IkZpbGwtMTUiIGZpbGw9IiNGRkZGRkYiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNOTMuMDI1LDExMy44IEM5My4wMDUsMTEzLjggOTIuOTg0LDExMy43OTUgOTIuOTY2LDExMy43ODUgQzkyLjkzMSwxMTMuNzY0IDkyLjkwOCwxMTMuNzI1IDkyLjkwOCwxMTMuNjg0IEw5Mi45MDgsNjIuODEzIEM5Mi45MDgsNjIuNzcxIDkyLjkzMSw2Mi43MzMgOTIuOTY2LDYyLjcxMiBMMTY4LjQ4NCwxOS4xMTIgQzE2OC41MiwxOS4wOSAxNjguNTY1LDE5LjA5IDE2OC42MDEsMTkuMTEyIEMxNjguNjM3LDE5LjEzMiAxNjguNjYsMTkuMTcxIDE2OC42NiwxOS4yMTIgTDE2OC42Niw3MC4wODMgQzE2OC42Niw3MC4xMjUgMTY4LjYzNyw3MC4xNjQgMTY4LjYwMSw3MC4xODQgTDE0MS4yOCw4NS45NTggQzE0MS4yNTEsODUuOTc1IDE0MS4yMTcsODUuOTc5IDE0MS4xODYsODUuOTY4IEMxNDEuMTU0LDg1Ljk1OCAxNDEuMTI5LDg1LjkzNiAxNDEuMTE1LDg1LjkwNiBMMTM0LjY1NSw3MS43MzggQzEzNC4yOCw3MC45MTUgMTMzLjU5Myw3MC40NjMgMTMyLjcyLDcwLjQ2MyBDMTMxLjYzMiw3MC40NjMgMTMwLjM1Nyw3MS4xNDggMTI5LjIyMSw3Mi4zNDQgQzEyOC4xODYsNzMuNDMzIDEyNy4zNDcsNzQuODgxIDEyNi45MTksNzYuMzE1IEwxMjAuNDU4LDk3Ljk0MyBDMTIwLjQ1LDk3Ljk3MiAxMjAuNDMxLDk3Ljk5NiAxMjAuNDA1LDk4LjAxIEw5My4wODMsMTEzLjc4NSBDOTMuMDY1LDExMy43OTUgOTMuMDQ1LDExMy44IDkzLjAyNSwxMTMuOCBMOTMuMDI1LDExMy44IFogTTkzLjE0Miw2Mi44ODEgTDkzLjE0MiwxMTMuNDgxIEwxMjAuMjQ4LDk3LjgzMiBMMTI2LjY5NSw3Ni4yNDggQzEyNy4xNCw3NC43NTggMTI3Ljk3Nyw3My4zMTUgMTI5LjA1Miw3Mi4xODMgQzEzMC4yMzEsNzAuOTQyIDEzMS41NjgsNzAuMjI5IDEzMi43Miw3MC4yMjkgQzEzMy42ODksNzAuMjI5IDEzNC40NTIsNzAuNzMxIDEzNC44NjcsNzEuNjQxIEwxNDEuMjc0LDg1LjY5MiBMMTY4LjQyNiw3MC4wMTYgTDE2OC40MjYsMTkuNDE1IEw5My4xNDIsNjIuODgxIEw5My4xNDIsNjIuODgxIFoiIGlkPSJGaWxsLTE2IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE2OS44LDcwLjA4MyBMMTQyLjQ3OCw4NS44NTcgTDEzNi4wMTgsNzEuNjg5IEMxMzUuMTA4LDY5LjY5NCAxMzIuNTksNjkuOTUxIDEzMC4zOTMsNzIuMjYzIEMxMjkuMzM5LDczLjM3NCAxMjguNSw3NC44MTkgMTI4LjA2NCw3Ni4yODIgTDEyMS42MDMsOTcuOTA5IEw5NC4yODIsMTEzLjY4MyBMOTQuMjgyLDYyLjgxMyBMMTY5LjgsMTkuMjEzIEwxNjkuOCw3MC4wODMgWiIgaWQ9IkZpbGwtMTciIGZpbGw9IiNGQUZBRkEiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNOTQuMjgyLDExMy45MTcgQzk0LjI0MSwxMTMuOTE3IDk0LjIwMSwxMTMuOTA3IDk0LjE2NSwxMTMuODg2IEM5NC4wOTMsMTEzLjg0NSA5NC4wNDgsMTEzLjc2NyA5NC4wNDgsMTEzLjY4NCBMOTQuMDQ4LDYyLjgxMyBDOTQuMDQ4LDYyLjczIDk0LjA5Myw2Mi42NTIgOTQuMTY1LDYyLjYxMSBMMTY5LjY4MywxOS4wMSBDMTY5Ljc1NSwxOC45NjkgMTY5Ljg0NCwxOC45NjkgMTY5LjkxNywxOS4wMSBDMTY5Ljk4OSwxOS4wNTIgMTcwLjAzMywxOS4xMjkgMTcwLjAzMywxOS4yMTIgTDE3MC4wMzMsNzAuMDgzIEMxNzAuMDMzLDcwLjE2NiAxNjkuOTg5LDcwLjI0NCAxNjkuOTE3LDcwLjI4NSBMMTQyLjU5NSw4Ni4wNiBDMTQyLjUzOCw4Ni4wOTIgMTQyLjQ2OSw4Ni4xIDE0Mi40MDcsODYuMDggQzE0Mi4zNDQsODYuMDYgMTQyLjI5Myw4Ni4wMTQgMTQyLjI2Niw4NS45NTQgTDEzNS44MDUsNzEuNzg2IEMxMzUuNDQ1LDcwLjk5NyAxMzQuODEzLDcwLjU4IDEzMy45NzcsNzAuNTggQzEzMi45MjEsNzAuNTggMTMxLjY3Niw3MS4yNTIgMTMwLjU2Miw3Mi40MjQgQzEyOS41NCw3My41MDEgMTI4LjcxMSw3NC45MzEgMTI4LjI4Nyw3Ni4zNDggTDEyMS44MjcsOTcuOTc2IEMxMjEuODEsOTguMDM0IDEyMS43NzEsOTguMDgyIDEyMS43Miw5OC4xMTIgTDk0LjM5OCwxMTMuODg2IEM5NC4zNjIsMTEzLjkwNyA5NC4zMjIsMTEzLjkxNyA5NC4yODIsMTEzLjkxNyBMOTQuMjgyLDExMy45MTcgWiBNOTQuNTE1LDYyLjk0OCBMOTQuNTE1LDExMy4yNzkgTDEyMS40MDYsOTcuNzU0IEwxMjcuODQsNzYuMjE1IEMxMjguMjksNzQuNzA4IDEyOS4xMzcsNzMuMjQ3IDEzMC4yMjQsNzIuMTAzIEMxMzEuNDI1LDcwLjgzOCAxMzIuNzkzLDcwLjExMiAxMzMuOTc3LDcwLjExMiBDMTM0Ljk5NSw3MC4xMTIgMTM1Ljc5NSw3MC42MzggMTM2LjIzLDcxLjU5MiBMMTQyLjU4NCw4NS41MjYgTDE2OS41NjYsNjkuOTQ4IEwxNjkuNTY2LDE5LjYxNyBMOTQuNTE1LDYyLjk0OCBMOTQuNTE1LDYyLjk0OCBaIiBpZD0iRmlsbC0xOCIgZmlsbD0iIzYwN0Q4QiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xMDkuODk0LDkyLjk0MyBMMTA5Ljg5NCw5Mi45NDMgQzEwOC4xMiw5Mi45NDMgMTA2LjY1Myw5Mi4yMTggMTA1LjY1LDkwLjgyMyBDMTA1LjU4Myw5MC43MzEgMTA1LjU5Myw5MC42MSAxMDUuNjczLDkwLjUyOSBDMTA1Ljc1Myw5MC40NDggMTA1Ljg4LDkwLjQ0IDEwNS45NzQsOTAuNTA2IEMxMDYuNzU0LDkxLjA1MyAxMDcuNjc5LDkxLjMzMyAxMDguNzI0LDkxLjMzMyBDMTEwLjA0Nyw5MS4zMzMgMTExLjQ3OCw5MC44OTQgMTEyLjk4LDkwLjAyNyBDMTE4LjI5MSw4Ni45NiAxMjIuNjExLDc5LjUwOSAxMjIuNjExLDczLjQxNiBDMTIyLjYxMSw3MS40ODkgMTIyLjE2OSw2OS44NTYgMTIxLjMzMyw2OC42OTIgQzEyMS4yNjYsNjguNiAxMjEuMjc2LDY4LjQ3MyAxMjEuMzU2LDY4LjM5MiBDMTIxLjQzNiw2OC4zMTEgMTIxLjU2Myw2OC4yOTkgMTIxLjY1Niw2OC4zNjUgQzEyMy4zMjcsNjkuNTM3IDEyNC4yNDcsNzEuNzQ2IDEyNC4yNDcsNzQuNTg0IEMxMjQuMjQ3LDgwLjgyNiAxMTkuODIxLDg4LjQ0NyAxMTQuMzgyLDkxLjU4NyBDMTEyLjgwOCw5Mi40OTUgMTExLjI5OCw5Mi45NDMgMTA5Ljg5NCw5Mi45NDMgTDEwOS44OTQsOTIuOTQzIFogTTEwNi45MjUsOTEuNDAxIEMxMDcuNzM4LDkyLjA1MiAxMDguNzQ1LDkyLjI3OCAxMDkuODkzLDkyLjI3OCBMMTA5Ljg5NCw5Mi4yNzggQzExMS4yMTUsOTIuMjc4IDExMi42NDcsOTEuOTUxIDExNC4xNDgsOTEuMDg0IEMxMTkuNDU5LDg4LjAxNyAxMjMuNzgsODAuNjIxIDEyMy43OCw3NC41MjggQzEyMy43OCw3Mi41NDkgMTIzLjMxNyw3MC45MjkgMTIyLjQ1NCw2OS43NjcgQzEyMi44NjUsNzAuODAyIDEyMy4wNzksNzIuMDQyIDEyMy4wNzksNzMuNDAyIEMxMjMuMDc5LDc5LjY0NSAxMTguNjUzLDg3LjI4NSAxMTMuMjE0LDkwLjQyNSBDMTExLjY0LDkxLjMzNCAxMTAuMTMsOTEuNzQyIDEwOC43MjQsOTEuNzQyIEMxMDguMDgzLDkxLjc0MiAxMDcuNDgxLDkxLjU5MyAxMDYuOTI1LDkxLjQwMSBMMTA2LjkyNSw5MS40MDEgWiIgaWQ9IkZpbGwtMTkiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTEzLjA5Nyw5MC4yMyBDMTE4LjQ4MSw4Ny4xMjIgMTIyLjg0NSw3OS41OTQgMTIyLjg0NSw3My40MTYgQzEyMi44NDUsNzEuMzY1IDEyMi4zNjIsNjkuNzI0IDEyMS41MjIsNjguNTU2IEMxMTkuNzM4LDY3LjMwNCAxMTcuMTQ4LDY3LjM2MiAxMTQuMjY1LDY5LjAyNiBDMTA4Ljg4MSw3Mi4xMzQgMTA0LjUxNyw3OS42NjIgMTA0LjUxNyw4NS44NCBDMTA0LjUxNyw4Ny44OTEgMTA1LDg5LjUzMiAxMDUuODQsOTAuNyBDMTA3LjYyNCw5MS45NTIgMTEwLjIxNCw5MS44OTQgMTEzLjA5Nyw5MC4yMyIgaWQ9IkZpbGwtMjAiIGZpbGw9IiNGQUZBRkEiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTA4LjcyNCw5MS42MTQgTDEwOC43MjQsOTEuNjE0IEMxMDcuNTgyLDkxLjYxNCAxMDYuNTY2LDkxLjQwMSAxMDUuNzA1LDkwLjc5NyBDMTA1LjY4NCw5MC43ODMgMTA1LjY2NSw5MC44MTEgMTA1LjY1LDkwLjc5IEMxMDQuNzU2LDg5LjU0NiAxMDQuMjgzLDg3Ljg0MiAxMDQuMjgzLDg1LjgxNyBDMTA0LjI4Myw3OS41NzUgMTA4LjcwOSw3MS45NTMgMTE0LjE0OCw2OC44MTIgQzExNS43MjIsNjcuOTA0IDExNy4yMzIsNjcuNDQ5IDExOC42MzgsNjcuNDQ5IEMxMTkuNzgsNjcuNDQ5IDEyMC43OTYsNjcuNzU4IDEyMS42NTYsNjguMzYyIEMxMjEuNjc4LDY4LjM3NyAxMjEuNjk3LDY4LjM5NyAxMjEuNzEyLDY4LjQxOCBDMTIyLjYwNiw2OS42NjIgMTIzLjA3OSw3MS4zOSAxMjMuMDc5LDczLjQxNSBDMTIzLjA3OSw3OS42NTggMTE4LjY1Myw4Ny4xOTggMTEzLjIxNCw5MC4zMzggQzExMS42NCw5MS4yNDcgMTEwLjEzLDkxLjYxNCAxMDguNzI0LDkxLjYxNCBMMTA4LjcyNCw5MS42MTQgWiBNMTA2LjAwNiw5MC41MDUgQzEwNi43OCw5MS4wMzcgMTA3LjY5NCw5MS4yODEgMTA4LjcyNCw5MS4yODEgQzExMC4wNDcsOTEuMjgxIDExMS40NzgsOTAuODY4IDExMi45OCw5MC4wMDEgQzExOC4yOTEsODYuOTM1IDEyMi42MTEsNzkuNDk2IDEyMi42MTEsNzMuNDAzIEMxMjIuNjExLDcxLjQ5NCAxMjIuMTc3LDY5Ljg4IDEyMS4zNTYsNjguNzE4IEMxMjAuNTgyLDY4LjE4NSAxMTkuNjY4LDY3LjkxOSAxMTguNjM4LDY3LjkxOSBDMTE3LjMxNSw2Ny45MTkgMTE1Ljg4Myw2OC4zNiAxMTQuMzgyLDY5LjIyNyBDMTA5LjA3MSw3Mi4yOTMgMTA0Ljc1MSw3OS43MzMgMTA0Ljc1MSw4NS44MjYgQzEwNC43NTEsODcuNzM1IDEwNS4xODUsODkuMzQzIDEwNi4wMDYsOTAuNTA1IEwxMDYuMDA2LDkwLjUwNSBaIiBpZD0iRmlsbC0yMSIgZmlsbD0iIzYwN0Q4QiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xNDkuMzE4LDcuMjYyIEwxMzkuMzM0LDE2LjE0IEwxNTUuMjI3LDI3LjE3MSBMMTYwLjgxNiwyMS4wNTkgTDE0OS4zMTgsNy4yNjIiIGlkPSJGaWxsLTIyIiBmaWxsPSIjRkFGQUZBIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE2OS42NzYsMTMuODQgTDE1OS45MjgsMTkuNDY3IEMxNTYuMjg2LDIxLjU3IDE1MC40LDIxLjU4IDE0Ni43ODEsMTkuNDkxIEMxNDMuMTYxLDE3LjQwMiAxNDMuMTgsMTQuMDAzIDE0Ni44MjIsMTEuOSBMMTU2LjMxNyw2LjI5MiBMMTQ5LjU4OCwyLjQwNyBMNjcuNzUyLDQ5LjQ3OCBMMTEzLjY3NSw3NS45OTIgTDExNi43NTYsNzQuMjEzIEMxMTcuMzg3LDczLjg0OCAxMTcuNjI1LDczLjMxNSAxMTcuMzc0LDcyLjgyMyBDMTE1LjAxNyw2OC4xOTEgMTE0Ljc4MSw2My4yNzcgMTE2LjY5MSw1OC41NjEgQzEyMi4zMjksNDQuNjQxIDE0MS4yLDMzLjc0NiAxNjUuMzA5LDMwLjQ5MSBDMTczLjQ3OCwyOS4zODggMTgxLjk4OSwyOS41MjQgMTkwLjAxMywzMC44ODUgQzE5MC44NjUsMzEuMDMgMTkxLjc4OSwzMC44OTMgMTkyLjQyLDMwLjUyOCBMMTk1LjUwMSwyOC43NSBMMTY5LjY3NiwxMy44NCIgaWQ9IkZpbGwtMjMiIGZpbGw9IiNGQUZBRkEiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTEzLjY3NSw3Ni40NTkgQzExMy41OTQsNzYuNDU5IDExMy41MTQsNzYuNDM4IDExMy40NDIsNzYuMzk3IEw2Ny41MTgsNDkuODgyIEM2Ny4zNzQsNDkuNzk5IDY3LjI4NCw0OS42NDUgNjcuMjg1LDQ5LjQ3OCBDNjcuMjg1LDQ5LjMxMSA2Ny4zNzQsNDkuMTU3IDY3LjUxOSw0OS4wNzMgTDE0OS4zNTUsMi4wMDIgQzE0OS40OTksMS45MTkgMTQ5LjY3NywxLjkxOSAxNDkuODIxLDIuMDAyIEwxNTYuNTUsNS44ODcgQzE1Ni43NzQsNi4wMTcgMTU2Ljg1LDYuMzAyIDE1Ni43MjIsNi41MjYgQzE1Ni41OTIsNi43NDkgMTU2LjMwNyw2LjgyNiAxNTYuMDgzLDYuNjk2IEwxNDkuNTg3LDIuOTQ2IEw2OC42ODcsNDkuNDc5IEwxMTMuNjc1LDc1LjQ1MiBMMTE2LjUyMyw3My44MDggQzExNi43MTUsNzMuNjk3IDExNy4xNDMsNzMuMzk5IDExNi45NTgsNzMuMDM1IEMxMTQuNTQyLDY4LjI4NyAxMTQuMyw2My4yMjEgMTE2LjI1OCw1OC4zODUgQzExOS4wNjQsNTEuNDU4IDEyNS4xNDMsNDUuMTQzIDEzMy44NCw0MC4xMjIgQzE0Mi40OTcsMzUuMTI0IDE1My4zNTgsMzEuNjMzIDE2NS4yNDcsMzAuMDI4IEMxNzMuNDQ1LDI4LjkyMSAxODIuMDM3LDI5LjA1OCAxOTAuMDkxLDMwLjQyNSBDMTkwLjgzLDMwLjU1IDE5MS42NTIsMzAuNDMyIDE5Mi4xODYsMzAuMTI0IEwxOTQuNTY3LDI4Ljc1IEwxNjkuNDQyLDE0LjI0NCBDMTY5LjIxOSwxNC4xMTUgMTY5LjE0MiwxMy44MjkgMTY5LjI3MSwxMy42MDYgQzE2OS40LDEzLjM4MiAxNjkuNjg1LDEzLjMwNiAxNjkuOTA5LDEzLjQzNSBMMTk1LjczNCwyOC4zNDUgQzE5NS44NzksMjguNDI4IDE5NS45NjgsMjguNTgzIDE5NS45NjgsMjguNzUgQzE5NS45NjgsMjguOTE2IDE5NS44NzksMjkuMDcxIDE5NS43MzQsMjkuMTU0IEwxOTIuNjUzLDMwLjkzMyBDMTkxLjkzMiwzMS4zNSAxOTAuODksMzEuNTA4IDE4OS45MzUsMzEuMzQ2IEMxODEuOTcyLDI5Ljk5NSAxNzMuNDc4LDI5Ljg2IDE2NS4zNzIsMzAuOTU0IEMxNTMuNjAyLDMyLjU0MyAxNDIuODYsMzUuOTkzIDEzNC4zMDcsNDAuOTMxIEMxMjUuNzkzLDQ1Ljg0NyAxMTkuODUxLDUyLjAwNCAxMTcuMTI0LDU4LjczNiBDMTE1LjI3LDYzLjMxNCAxMTUuNTAxLDY4LjExMiAxMTcuNzksNzIuNjExIEMxMTguMTYsNzMuMzM2IDExNy44NDUsNzQuMTI0IDExNi45OSw3NC42MTcgTDExMy45MDksNzYuMzk3IEMxMTMuODM2LDc2LjQzOCAxMTMuNzU2LDc2LjQ1OSAxMTMuNjc1LDc2LjQ1OSIgaWQ9IkZpbGwtMjQiIGZpbGw9IiM0NTVBNjQiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTUzLjMxNiwyMS4yNzkgQzE1MC45MDMsMjEuMjc5IDE0OC40OTUsMjAuNzUxIDE0Ni42NjQsMTkuNjkzIEMxNDQuODQ2LDE4LjY0NCAxNDMuODQ0LDE3LjIzMiAxNDMuODQ0LDE1LjcxOCBDMTQzLjg0NCwxNC4xOTEgMTQ0Ljg2LDEyLjc2MyAxNDYuNzA1LDExLjY5OCBMMTU2LjE5OCw2LjA5MSBDMTU2LjMwOSw2LjAyNSAxNTYuNDUyLDYuMDYyIDE1Ni41MTgsNi4xNzMgQzE1Ni41ODMsNi4yODQgMTU2LjU0Nyw2LjQyNyAxNTYuNDM2LDYuNDkzIEwxNDYuOTQsMTIuMTAyIEMxNDUuMjQ0LDEzLjA4MSAxNDQuMzEyLDE0LjM2NSAxNDQuMzEyLDE1LjcxOCBDMTQ0LjMxMiwxNy4wNTggMTQ1LjIzLDE4LjMyNiAxNDYuODk3LDE5LjI4OSBDMTUwLjQ0NiwyMS4zMzggMTU2LjI0LDIxLjMyNyAxNTkuODExLDE5LjI2NSBMMTY5LjU1OSwxMy42MzcgQzE2OS42NywxMy41NzMgMTY5LjgxMywxMy42MTEgMTY5Ljg3OCwxMy43MjMgQzE2OS45NDMsMTMuODM0IDE2OS45MDQsMTMuOTc3IDE2OS43OTMsMTQuMDQyIEwxNjAuMDQ1LDE5LjY3IEMxNTguMTg3LDIwLjc0MiAxNTUuNzQ5LDIxLjI3OSAxNTMuMzE2LDIxLjI3OSIgaWQ9IkZpbGwtMjUiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTEzLjY3NSw3NS45OTIgTDY3Ljc2Miw0OS40ODQiIGlkPSJGaWxsLTI2IiBmaWxsPSIjNDU1QTY0Ij48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTExMy42NzUsNzYuMzQyIEMxMTMuNjE1LDc2LjM0MiAxMTMuNTU1LDc2LjMyNyAxMTMuNSw3Ni4yOTUgTDY3LjU4Nyw0OS43ODcgQzY3LjQxOSw0OS42OSA2Ny4zNjIsNDkuNDc2IDY3LjQ1OSw0OS4zMDkgQzY3LjU1Niw0OS4xNDEgNjcuNzcsNDkuMDgzIDY3LjkzNyw0OS4xOCBMMTEzLjg1LDc1LjY4OCBDMTE0LjAxOCw3NS43ODUgMTE0LjA3NSw3NiAxMTMuOTc4LDc2LjE2NyBDMTEzLjkxNCw3Ni4yNzkgMTEzLjc5Niw3Ni4zNDIgMTEzLjY3NSw3Ni4zNDIiIGlkPSJGaWxsLTI3IiBmaWxsPSIjNDU1QTY0Ij48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTY3Ljc2Miw0OS40ODQgTDY3Ljc2MiwxMDMuNDg1IEM2Ny43NjIsMTA0LjU3NSA2OC41MzIsMTA1LjkwMyA2OS40ODIsMTA2LjQ1MiBMMTExLjk1NSwxMzAuOTczIEMxMTIuOTA1LDEzMS41MjIgMTEzLjY3NSwxMzEuMDgzIDExMy42NzUsMTI5Ljk5MyBMMTEzLjY3NSw3NS45OTIiIGlkPSJGaWxsLTI4IiBmaWxsPSIjRkFGQUZBIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTExMi43MjcsMTMxLjU2MSBDMTEyLjQzLDEzMS41NjEgMTEyLjEwNywxMzEuNDY2IDExMS43OCwxMzEuMjc2IEw2OS4zMDcsMTA2Ljc1NSBDNjguMjQ0LDEwNi4xNDIgNjcuNDEyLDEwNC43MDUgNjcuNDEyLDEwMy40ODUgTDY3LjQxMiw0OS40ODQgQzY3LjQxMiw0OS4yOSA2Ny41NjksNDkuMTM0IDY3Ljc2Miw0OS4xMzQgQzY3Ljk1Niw0OS4xMzQgNjguMTEzLDQ5LjI5IDY4LjExMyw0OS40ODQgTDY4LjExMywxMDMuNDg1IEM2OC4xMTMsMTA0LjQ0NSA2OC44MiwxMDUuNjY1IDY5LjY1NywxMDYuMTQ4IEwxMTIuMTMsMTMwLjY3IEMxMTIuNDc0LDEzMC44NjggMTEyLjc5MSwxMzAuOTEzIDExMywxMzAuNzkyIEMxMTMuMjA2LDEzMC42NzMgMTEzLjMyNSwxMzAuMzgxIDExMy4zMjUsMTI5Ljk5MyBMMTEzLjMyNSw3NS45OTIgQzExMy4zMjUsNzUuNzk4IDExMy40ODIsNzUuNjQxIDExMy42NzUsNzUuNjQxIEMxMTMuODY5LDc1LjY0MSAxMTQuMDI1LDc1Ljc5OCAxMTQuMDI1LDc1Ljk5MiBMMTE0LjAyNSwxMjkuOTkzIEMxMTQuMDI1LDEzMC42NDggMTEzLjc4NiwxMzEuMTQ3IDExMy4zNSwxMzEuMzk5IEMxMTMuMTYyLDEzMS41MDcgMTEyLjk1MiwxMzEuNTYxIDExMi43MjcsMTMxLjU2MSIgaWQ9IkZpbGwtMjkiIGZpbGw9IiM0NTVBNjQiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTEyLjg2LDQwLjUxMiBDMTEyLjg2LDQwLjUxMiAxMTIuODYsNDAuNTEyIDExMi44NTksNDAuNTEyIEMxMTAuNTQxLDQwLjUxMiAxMDguMzYsMzkuOTkgMTA2LjcxNywzOS4wNDEgQzEwNS4wMTIsMzguMDU3IDEwNC4wNzQsMzYuNzI2IDEwNC4wNzQsMzUuMjkyIEMxMDQuMDc0LDMzLjg0NyAxMDUuMDI2LDMyLjUwMSAxMDYuNzU0LDMxLjUwNCBMMTE4Ljc5NSwyNC41NTEgQzEyMC40NjMsMjMuNTg5IDEyMi42NjksMjMuMDU4IDEyNS4wMDcsMjMuMDU4IEMxMjcuMzI1LDIzLjA1OCAxMjkuNTA2LDIzLjU4MSAxMzEuMTUsMjQuNTMgQzEzMi44NTQsMjUuNTE0IDEzMy43OTMsMjYuODQ1IDEzMy43OTMsMjguMjc4IEMxMzMuNzkzLDI5LjcyNCAxMzIuODQxLDMxLjA2OSAxMzEuMTEzLDMyLjA2NyBMMTE5LjA3MSwzOS4wMTkgQzExNy40MDMsMzkuOTgyIDExNS4xOTcsNDAuNTEyIDExMi44Niw0MC41MTIgTDExMi44Niw0MC41MTIgWiBNMTI1LjAwNywyMy43NTkgQzEyMi43OSwyMy43NTkgMTIwLjcwOSwyNC4yNTYgMTE5LjE0NiwyNS4xNTggTDEwNy4xMDQsMzIuMTEgQzEwNS42MDIsMzIuOTc4IDEwNC43NzQsMzQuMTA4IDEwNC43NzQsMzUuMjkyIEMxMDQuNzc0LDM2LjQ2NSAxMDUuNTg5LDM3LjU4MSAxMDcuMDY3LDM4LjQzNCBDMTA4LjYwNSwzOS4zMjMgMTEwLjY2MywzOS44MTIgMTEyLjg1OSwzOS44MTIgTDExMi44NiwzOS44MTIgQzExNS4wNzYsMzkuODEyIDExNy4xNTgsMzkuMzE1IDExOC43MjEsMzguNDEzIEwxMzAuNzYyLDMxLjQ2IEMxMzIuMjY0LDMwLjU5MyAxMzMuMDkyLDI5LjQ2MyAxMzMuMDkyLDI4LjI3OCBDMTMzLjA5MiwyNy4xMDYgMTMyLjI3OCwyNS45OSAxMzAuOCwyNS4xMzYgQzEyOS4yNjEsMjQuMjQ4IDEyNy4yMDQsMjMuNzU5IDEyNS4wMDcsMjMuNzU5IEwxMjUuMDA3LDIzLjc1OSBaIiBpZD0iRmlsbC0zMCIgZmlsbD0iIzYwN0Q4QiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xNjUuNjMsMTYuMjE5IEwxNTkuODk2LDE5LjUzIEMxNTYuNzI5LDIxLjM1OCAxNTEuNjEsMjEuMzY3IDE0OC40NjMsMTkuNTUgQzE0NS4zMTYsMTcuNzMzIDE0NS4zMzIsMTQuNzc4IDE0OC40OTksMTIuOTQ5IEwxNTQuMjMzLDkuNjM5IEwxNjUuNjMsMTYuMjE5IiBpZD0iRmlsbC0zMSIgZmlsbD0iI0ZBRkFGQSI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xNTQuMjMzLDEwLjQ0OCBMMTY0LjIyOCwxNi4yMTkgTDE1OS41NDYsMTguOTIzIEMxNTguMTEyLDE5Ljc1IDE1Ni4xOTQsMjAuMjA2IDE1NC4xNDcsMjAuMjA2IEMxNTIuMTE4LDIwLjIwNiAxNTAuMjI0LDE5Ljc1NyAxNDguODE0LDE4Ljk0MyBDMTQ3LjUyNCwxOC4xOTkgMTQ2LjgxNCwxNy4yNDkgMTQ2LjgxNCwxNi4yNjkgQzE0Ni44MTQsMTUuMjc4IDE0Ny41MzcsMTQuMzE0IDE0OC44NSwxMy41NTYgTDE1NC4yMzMsMTAuNDQ4IE0xNTQuMjMzLDkuNjM5IEwxNDguNDk5LDEyLjk0OSBDMTQ1LjMzMiwxNC43NzggMTQ1LjMxNiwxNy43MzMgMTQ4LjQ2MywxOS41NSBDMTUwLjAzMSwyMC40NTUgMTUyLjA4NiwyMC45MDcgMTU0LjE0NywyMC45MDcgQzE1Ni4yMjQsMjAuOTA3IDE1OC4zMDYsMjAuNDQ3IDE1OS44OTYsMTkuNTMgTDE2NS42MywxNi4yMTkgTDE1NC4yMzMsOS42MzkiIGlkPSJGaWxsLTMyIiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE0NS40NDUsNzIuNjY3IEwxNDUuNDQ1LDcyLjY2NyBDMTQzLjY3Miw3Mi42NjcgMTQyLjIwNCw3MS44MTcgMTQxLjIwMiw3MC40MjIgQzE0MS4xMzUsNzAuMzMgMTQxLjE0NSw3MC4xNDcgMTQxLjIyNSw3MC4wNjYgQzE0MS4zMDUsNjkuOTg1IDE0MS40MzIsNjkuOTQ2IDE0MS41MjUsNzAuMDExIEMxNDIuMzA2LDcwLjU1OSAxNDMuMjMxLDcwLjgyMyAxNDQuMjc2LDcwLjgyMiBDMTQ1LjU5OCw3MC44MjIgMTQ3LjAzLDcwLjM3NiAxNDguNTMyLDY5LjUwOSBDMTUzLjg0Miw2Ni40NDMgMTU4LjE2Myw1OC45ODcgMTU4LjE2Myw1Mi44OTQgQzE1OC4xNjMsNTAuOTY3IDE1Ny43MjEsNDkuMzMyIDE1Ni44ODQsNDguMTY4IEMxNTYuODE4LDQ4LjA3NiAxNTYuODI4LDQ3Ljk0OCAxNTYuOTA4LDQ3Ljg2NyBDMTU2Ljk4OCw0Ny43ODYgMTU3LjExNCw0Ny43NzQgMTU3LjIwOCw0Ny44NCBDMTU4Ljg3OCw0OS4wMTIgMTU5Ljc5OCw1MS4yMiAxNTkuNzk4LDU0LjA1OSBDMTU5Ljc5OCw2MC4zMDEgMTU1LjM3Myw2OC4wNDYgMTQ5LjkzMyw3MS4xODYgQzE0OC4zNiw3Mi4wOTQgMTQ2Ljg1LDcyLjY2NyAxNDUuNDQ1LDcyLjY2NyBMMTQ1LjQ0NSw3Mi42NjcgWiBNMTQyLjQ3Niw3MSBDMTQzLjI5LDcxLjY1MSAxNDQuMjk2LDcyLjAwMiAxNDUuNDQ1LDcyLjAwMiBDMTQ2Ljc2Nyw3Mi4wMDIgMTQ4LjE5OCw3MS41NSAxNDkuNyw3MC42ODIgQzE1NS4wMSw2Ny42MTcgMTU5LjMzMSw2MC4xNTkgMTU5LjMzMSw1NC4wNjUgQzE1OS4zMzEsNTIuMDg1IDE1OC44NjgsNTAuNDM1IDE1OC4wMDYsNDkuMjcyIEMxNTguNDE3LDUwLjMwNyAxNTguNjMsNTEuNTMyIDE1OC42Myw1Mi44OTIgQzE1OC42Myw1OS4xMzQgMTU0LjIwNSw2Ni43NjcgMTQ4Ljc2NSw2OS45MDcgQzE0Ny4xOTIsNzAuODE2IDE0NS42ODEsNzEuMjgzIDE0NC4yNzYsNzEuMjgzIEMxNDMuNjM0LDcxLjI4MyAxNDMuMDMzLDcxLjE5MiAxNDIuNDc2LDcxIEwxNDIuNDc2LDcxIFoiIGlkPSJGaWxsLTMzIiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE0OC42NDgsNjkuNzA0IEMxNTQuMDMyLDY2LjU5NiAxNTguMzk2LDU5LjA2OCAxNTguMzk2LDUyLjg5MSBDMTU4LjM5Niw1MC44MzkgMTU3LjkxMyw0OS4xOTggMTU3LjA3NCw0OC4wMyBDMTU1LjI4OSw0Ni43NzggMTUyLjY5OSw0Ni44MzYgMTQ5LjgxNiw0OC41MDEgQzE0NC40MzMsNTEuNjA5IDE0MC4wNjgsNTkuMTM3IDE0MC4wNjgsNjUuMzE0IEMxNDAuMDY4LDY3LjM2NSAxNDAuNTUyLDY5LjAwNiAxNDEuMzkxLDcwLjE3NCBDMTQzLjE3Niw3MS40MjcgMTQ1Ljc2NSw3MS4zNjkgMTQ4LjY0OCw2OS43MDQiIGlkPSJGaWxsLTM0IiBmaWxsPSIjRkFGQUZBIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTE0NC4yNzYsNzEuMjc2IEwxNDQuMjc2LDcxLjI3NiBDMTQzLjEzMyw3MS4yNzYgMTQyLjExOCw3MC45NjkgMTQxLjI1Nyw3MC4zNjUgQzE0MS4yMzYsNzAuMzUxIDE0MS4yMTcsNzAuMzMyIDE0MS4yMDIsNzAuMzExIEMxNDAuMzA3LDY5LjA2NyAxMzkuODM1LDY3LjMzOSAxMzkuODM1LDY1LjMxNCBDMTM5LjgzNSw1OS4wNzMgMTQ0LjI2LDUxLjQzOSAxNDkuNyw0OC4yOTggQzE1MS4yNzMsNDcuMzkgMTUyLjc4NCw0Ni45MjkgMTU0LjE4OSw0Ni45MjkgQzE1NS4zMzIsNDYuOTI5IDE1Ni4zNDcsNDcuMjM2IDE1Ny4yMDgsNDcuODM5IEMxNTcuMjI5LDQ3Ljg1NCAxNTcuMjQ4LDQ3Ljg3MyAxNTcuMjYzLDQ3Ljg5NCBDMTU4LjE1Nyw0OS4xMzggMTU4LjYzLDUwLjg2NSAxNTguNjMsNTIuODkxIEMxNTguNjMsNTkuMTMyIDE1NC4yMDUsNjYuNzY2IDE0OC43NjUsNjkuOTA3IEMxNDcuMTkyLDcwLjgxNSAxNDUuNjgxLDcxLjI3NiAxNDQuMjc2LDcxLjI3NiBMMTQ0LjI3Niw3MS4yNzYgWiBNMTQxLjU1OCw3MC4xMDQgQzE0Mi4zMzEsNzAuNjM3IDE0My4yNDUsNzEuMDA1IDE0NC4yNzYsNzEuMDA1IEMxNDUuNTk4LDcxLjAwNSAxNDcuMDMsNzAuNDY3IDE0OC41MzIsNjkuNiBDMTUzLjg0Miw2Ni41MzQgMTU4LjE2Myw1OS4wMzMgMTU4LjE2Myw1Mi45MzkgQzE1OC4xNjMsNTEuMDMxIDE1Ny43MjksNDkuMzg1IDE1Ni45MDcsNDguMjIzIEMxNTYuMTMzLDQ3LjY5MSAxNTUuMjE5LDQ3LjQwOSAxNTQuMTg5LDQ3LjQwOSBDMTUyLjg2Nyw0Ny40MDkgMTUxLjQzNSw0Ny44NDIgMTQ5LjkzMyw0OC43MDkgQzE0NC42MjMsNTEuNzc1IDE0MC4zMDIsNTkuMjczIDE0MC4zMDIsNjUuMzY2IEMxNDAuMzAyLDY3LjI3NiAxNDAuNzM2LDY4Ljk0MiAxNDEuNTU4LDcwLjEwNCBMMTQxLjU1OCw3MC4xMDQgWiIgaWQ9IkZpbGwtMzUiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTUwLjcyLDY1LjM2MSBMMTUwLjM1Nyw2NS4wNjYgQzE1MS4xNDcsNjQuMDkyIDE1MS44NjksNjMuMDQgMTUyLjUwNSw2MS45MzggQzE1My4zMTMsNjAuNTM5IDE1My45NzgsNTkuMDY3IDE1NC40ODIsNTcuNTYzIEwxNTQuOTI1LDU3LjcxMiBDMTU0LjQxMiw1OS4yNDUgMTUzLjczMyw2MC43NDUgMTUyLjkxLDYyLjE3MiBDMTUyLjI2Miw2My4yOTUgMTUxLjUyNSw2NC4zNjggMTUwLjcyLDY1LjM2MSIgaWQ9IkZpbGwtMzYiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTE1LjkxNyw4NC41MTQgTDExNS41NTQsODQuMjIgQzExNi4zNDQsODMuMjQ1IDExNy4wNjYsODIuMTk0IDExNy43MDIsODEuMDkyIEMxMTguNTEsNzkuNjkyIDExOS4xNzUsNzguMjIgMTE5LjY3OCw3Ni43MTcgTDEyMC4xMjEsNzYuODY1IEMxMTkuNjA4LDc4LjM5OCAxMTguOTMsNzkuODk5IDExOC4xMDYsODEuMzI2IEMxMTcuNDU4LDgyLjQ0OCAxMTYuNzIyLDgzLjUyMSAxMTUuOTE3LDg0LjUxNCIgaWQ9IkZpbGwtMzciIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTE0LDEzMC40NzYgTDExNCwxMzAuMDA4IEwxMTQsNzYuMDUyIEwxMTQsNzUuNTg0IEwxMTQsNzYuMDUyIEwxMTQsMTMwLjAwOCBMMTE0LDEzMC40NzYiIGlkPSJGaWxsLTM4IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICA8L2c+CiAgICAgICAgICAgICAgICA8ZyBpZD0iSW1wb3J0ZWQtTGF5ZXJzLUNvcHkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDYyLjAwMDAwMCwgMC4wMDAwMDApIiBza2V0Y2g6dHlwZT0iTVNTaGFwZUdyb3VwIj4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTkuODIyLDM3LjQ3NCBDMTkuODM5LDM3LjMzOSAxOS43NDcsMzcuMTk0IDE5LjU1NSwzNy4wODIgQzE5LjIyOCwzNi44OTQgMTguNzI5LDM2Ljg3MiAxOC40NDYsMzcuMDM3IEwxMi40MzQsNDAuNTA4IEMxMi4zMDMsNDAuNTg0IDEyLjI0LDQwLjY4NiAxMi4yNDMsNDAuNzkzIEMxMi4yNDUsNDAuOTI1IDEyLjI0NSw0MS4yNTQgMTIuMjQ1LDQxLjM3MSBMMTIuMjQ1LDQxLjQxNCBMMTIuMjM4LDQxLjU0MiBDOC4xNDgsNDMuODg3IDUuNjQ3LDQ1LjMyMSA1LjY0Nyw0NS4zMjEgQzUuNjQ2LDQ1LjMyMSAzLjU3LDQ2LjM2NyAyLjg2LDUwLjUxMyBDMi44Niw1MC41MTMgMS45NDgsNTcuNDc0IDEuOTYyLDcwLjI1OCBDMS45NzcsODIuODI4IDIuNTY4LDg3LjMyOCAzLjEyOSw5MS42MDkgQzMuMzQ5LDkzLjI5MyA2LjEzLDkzLjczNCA2LjEzLDkzLjczNCBDNi40NjEsOTMuNzc0IDYuODI4LDkzLjcwNyA3LjIxLDkzLjQ4NiBMODIuNDgzLDQ5LjkzNSBDODQuMjkxLDQ4Ljg2NiA4NS4xNSw0Ni4yMTYgODUuNTM5LDQzLjY1MSBDODYuNzUyLDM1LjY2MSA4Ny4yMTQsMTAuNjczIDg1LjI2NCwzLjc3MyBDODUuMDY4LDMuMDggODQuNzU0LDIuNjkgODQuMzk2LDIuNDkxIEw4Mi4zMSwxLjcwMSBDODEuNTgzLDEuNzI5IDgwLjg5NCwyLjE2OCA4MC43NzYsMi4yMzYgQzgwLjYzNiwyLjMxNyA0MS44MDcsMjQuNTg1IDIwLjAzMiwzNy4wNzIgTDE5LjgyMiwzNy40NzQiIGlkPSJGaWxsLTEiIGZpbGw9IiNGRkZGRkYiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNODIuMzExLDEuNzAxIEw4NC4zOTYsMi40OTEgQzg0Ljc1NCwyLjY5IDg1LjA2OCwzLjA4IDg1LjI2NCwzLjc3MyBDODcuMjEzLDEwLjY3MyA4Ni43NTEsMzUuNjYgODUuNTM5LDQzLjY1MSBDODUuMTQ5LDQ2LjIxNiA4NC4yOSw0OC44NjYgODIuNDgzLDQ5LjkzNSBMNy4yMSw5My40ODYgQzYuODk3LDkzLjY2NyA2LjU5NSw5My43NDQgNi4zMTQsOTMuNzQ0IEw2LjEzMSw5My43MzMgQzYuMTMxLDkzLjczNCAzLjM0OSw5My4yOTMgMy4xMjgsOTEuNjA5IEMyLjU2OCw4Ny4zMjcgMS45NzcsODIuODI4IDEuOTYzLDcwLjI1OCBDMS45NDgsNTcuNDc0IDIuODYsNTAuNTEzIDIuODYsNTAuNTEzIEMzLjU3LDQ2LjM2NyA1LjY0Nyw0NS4zMjEgNS42NDcsNDUuMzIxIEM1LjY0Nyw0NS4zMjEgOC4xNDgsNDMuODg3IDEyLjIzOCw0MS41NDIgTDEyLjI0NSw0MS40MTQgTDEyLjI0NSw0MS4zNzEgQzEyLjI0NSw0MS4yNTQgMTIuMjQ1LDQwLjkyNSAxMi4yNDMsNDAuNzkzIEMxMi4yNCw0MC42ODYgMTIuMzAyLDQwLjU4MyAxMi40MzQsNDAuNTA4IEwxOC40NDYsMzcuMDM2IEMxOC41NzQsMzYuOTYyIDE4Ljc0NiwzNi45MjYgMTguOTI3LDM2LjkyNiBDMTkuMTQ1LDM2LjkyNiAxOS4zNzYsMzYuOTc5IDE5LjU1NCwzNy4wODIgQzE5Ljc0NywzNy4xOTQgMTkuODM5LDM3LjM0IDE5LjgyMiwzNy40NzQgTDIwLjAzMywzNy4wNzIgQzQxLjgwNiwyNC41ODUgODAuNjM2LDIuMzE4IDgwLjc3NywyLjIzNiBDODAuODk0LDIuMTY4IDgxLjU4MywxLjcyOSA4Mi4zMTEsMS43MDEgTTgyLjMxMSwwLjcwNCBMODIuMjcyLDAuNzA1IEM4MS42NTQsMC43MjggODAuOTg5LDAuOTQ5IDgwLjI5OCwxLjM2MSBMODAuMjc3LDEuMzczIEM4MC4xMjksMS40NTggNTkuNzY4LDEzLjEzNSAxOS43NTgsMzYuMDc5IEMxOS41LDM1Ljk4MSAxOS4yMTQsMzUuOTI5IDE4LjkyNywzNS45MjkgQzE4LjU2MiwzNS45MjkgMTguMjIzLDM2LjAxMyAxNy45NDcsMzYuMTczIEwxMS45MzUsMzkuNjQ0IEMxMS40OTMsMzkuODk5IDExLjIzNiw0MC4zMzQgMTEuMjQ2LDQwLjgxIEwxMS4yNDcsNDAuOTYgTDUuMTY3LDQ0LjQ0NyBDNC43OTQsNDQuNjQ2IDIuNjI1LDQ1Ljk3OCAxLjg3Nyw1MC4zNDUgTDEuODcxLDUwLjM4NCBDMS44NjIsNTAuNDU0IDAuOTUxLDU3LjU1NyAwLjk2NSw3MC4yNTkgQzAuOTc5LDgyLjg3OSAxLjU2OCw4Ny4zNzUgMi4xMzcsOTEuNzI0IEwyLjEzOSw5MS43MzkgQzIuNDQ3LDk0LjA5NCA1LjYxNCw5NC42NjIgNS45NzUsOTQuNzE5IEw2LjAwOSw5NC43MjMgQzYuMTEsOTQuNzM2IDYuMjEzLDk0Ljc0MiA2LjMxNCw5NC43NDIgQzYuNzksOTQuNzQyIDcuMjYsOTQuNjEgNy43MSw5NC4zNSBMODIuOTgzLDUwLjc5OCBDODQuNzk0LDQ5LjcyNyA4NS45ODIsNDcuMzc1IDg2LjUyNSw0My44MDEgQzg3LjcxMSwzNS45ODcgODguMjU5LDEwLjcwNSA4Ni4yMjQsMy41MDIgQzg1Ljk3MSwyLjYwOSA4NS41MiwxLjk3NSA4NC44ODEsMS42MiBMODQuNzQ5LDEuNTU4IEw4Mi42NjQsMC43NjkgQzgyLjU1MSwwLjcyNSA4Mi40MzEsMC43MDQgODIuMzExLDAuNzA0IiBpZD0iRmlsbC0yIiBmaWxsPSIjNDU1QTY0Ij48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTY2LjI2NywxMS41NjUgTDY3Ljc2MiwxMS45OTkgTDExLjQyMyw0NC4zMjUiIGlkPSJGaWxsLTMiIGZpbGw9IiNGRkZGRkYiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTIuMjAyLDkwLjU0NSBDMTIuMDI5LDkwLjU0NSAxMS44NjIsOTAuNDU1IDExLjc2OSw5MC4yOTUgQzExLjYzMiw5MC4wNTcgMTEuNzEzLDg5Ljc1MiAxMS45NTIsODkuNjE0IEwzMC4zODksNzguOTY5IEMzMC42MjgsNzguODMxIDMwLjkzMyw3OC45MTMgMzEuMDcxLDc5LjE1MiBDMzEuMjA4LDc5LjM5IDMxLjEyNyw3OS42OTYgMzAuODg4LDc5LjgzMyBMMTIuNDUxLDkwLjQ3OCBMMTIuMjAyLDkwLjU0NSIgaWQ9IkZpbGwtNCIgZmlsbD0iIzYwN0Q4QiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xMy43NjQsNDIuNjU0IEwxMy42NTYsNDIuNTkyIEwxMy43MDIsNDIuNDIxIEwxOC44MzcsMzkuNDU3IEwxOS4wMDcsMzkuNTAyIEwxOC45NjIsMzkuNjczIEwxMy44MjcsNDIuNjM3IEwxMy43NjQsNDIuNjU0IiBpZD0iRmlsbC01IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTguNTIsOTAuMzc1IEw4LjUyLDQ2LjQyMSBMOC41ODMsNDYuMzg1IEw3NS44NCw3LjU1NCBMNzUuODQsNTEuNTA4IEw3NS43NzgsNTEuNTQ0IEw4LjUyLDkwLjM3NSBMOC41Miw5MC4zNzUgWiBNOC43Nyw0Ni41NjQgTDguNzcsODkuOTQ0IEw3NS41OTEsNTEuMzY1IEw3NS41OTEsNy45ODUgTDguNzcsNDYuNTY0IEw4Ljc3LDQ2LjU2NCBaIiBpZD0iRmlsbC02IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTI0Ljk4Niw4My4xODIgQzI0Ljc1Niw4My4zMzEgMjQuMzc0LDgzLjU2NiAyNC4xMzcsODMuNzA1IEwxMi42MzIsOTAuNDA2IEMxMi4zOTUsOTAuNTQ1IDEyLjQyNiw5MC42NTggMTIuNyw5MC42NTggTDEzLjI2NSw5MC42NTggQzEzLjU0LDkwLjY1OCAxMy45NTgsOTAuNTQ1IDE0LjE5NSw5MC40MDYgTDI1LjcsODMuNzA1IEMyNS45MzcsODMuNTY2IDI2LjEyOCw4My40NTIgMjYuMTI1LDgzLjQ0OSBDMjYuMTIyLDgzLjQ0NyAyNi4xMTksODMuMjIgMjYuMTE5LDgyLjk0NiBDMjYuMTE5LDgyLjY3MiAyNS45MzEsODIuNTY5IDI1LjcwMSw4Mi43MTkgTDI0Ljk4Niw4My4xODIiIGlkPSJGaWxsLTciIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTMuMjY2LDkwLjc4MiBMMTIuNyw5MC43ODIgQzEyLjUsOTAuNzgyIDEyLjM4NCw5MC43MjYgMTIuMzU0LDkwLjYxNiBDMTIuMzI0LDkwLjUwNiAxMi4zOTcsOTAuMzk5IDEyLjU2OSw5MC4yOTkgTDI0LjA3NCw4My41OTcgQzI0LjMxLDgzLjQ1OSAyNC42ODksODMuMjI2IDI0LjkxOCw4My4wNzggTDI1LjYzMyw4Mi42MTQgQzI1LjcyMyw4Mi41NTUgMjUuODEzLDgyLjUyNSAyNS44OTksODIuNTI1IEMyNi4wNzEsODIuNTI1IDI2LjI0NCw4Mi42NTUgMjYuMjQ0LDgyLjk0NiBDMjYuMjQ0LDgzLjE2IDI2LjI0NSw4My4zMDkgMjYuMjQ3LDgzLjM4MyBMMjYuMjUzLDgzLjM4NyBMMjYuMjQ5LDgzLjQ1NiBDMjYuMjQ2LDgzLjUzMSAyNi4yNDYsODMuNTMxIDI1Ljc2Myw4My44MTIgTDE0LjI1OCw5MC41MTQgQzE0LDkwLjY2NSAxMy41NjQsOTAuNzgyIDEzLjI2Niw5MC43ODIgTDEzLjI2Niw5MC43ODIgWiBNMTIuNjY2LDkwLjUzMiBMMTIuNyw5MC41MzMgTDEzLjI2Niw5MC41MzMgQzEzLjUxOCw5MC41MzMgMTMuOTE1LDkwLjQyNSAxNC4xMzIsOTAuMjk5IEwyNS42MzcsODMuNTk3IEMyNS44MDUsODMuNDk5IDI1LjkzMSw4My40MjQgMjUuOTk4LDgzLjM4MyBDMjUuOTk0LDgzLjI5OSAyNS45OTQsODMuMTY1IDI1Ljk5NCw4Mi45NDYgTDI1Ljg5OSw4Mi43NzUgTDI1Ljc2OCw4Mi44MjQgTDI1LjA1NCw4My4yODcgQzI0LjgyMiw4My40MzcgMjQuNDM4LDgzLjY3MyAyNC4yLDgzLjgxMiBMMTIuNjk1LDkwLjUxNCBMMTIuNjY2LDkwLjUzMiBMMTIuNjY2LDkwLjUzMiBaIiBpZD0iRmlsbC04IiBmaWxsPSIjNjA3RDhCIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTEzLjI2Niw4OS44NzEgTDEyLjcsODkuODcxIEMxMi41LDg5Ljg3MSAxMi4zODQsODkuODE1IDEyLjM1NCw4OS43MDUgQzEyLjMyNCw4OS41OTUgMTIuMzk3LDg5LjQ4OCAxMi41NjksODkuMzg4IEwyNC4wNzQsODIuNjg2IEMyNC4zMzIsODIuNTM1IDI0Ljc2OCw4Mi40MTggMjUuMDY3LDgyLjQxOCBMMjUuNjMyLDgyLjQxOCBDMjUuODMyLDgyLjQxOCAyNS45NDgsODIuNDc0IDI1Ljk3OCw4Mi41ODQgQzI2LjAwOCw4Mi42OTQgMjUuOTM1LDgyLjgwMSAyNS43NjMsODIuOTAxIEwxNC4yNTgsODkuNjAzIEMxNCw4OS43NTQgMTMuNTY0LDg5Ljg3MSAxMy4yNjYsODkuODcxIEwxMy4yNjYsODkuODcxIFogTTEyLjY2Niw4OS42MjEgTDEyLjcsODkuNjIyIEwxMy4yNjYsODkuNjIyIEMxMy41MTgsODkuNjIyIDEzLjkxNSw4OS41MTUgMTQuMTMyLDg5LjM4OCBMMjUuNjM3LDgyLjY4NiBMMjUuNjY3LDgyLjY2OCBMMjUuNjMyLDgyLjY2NyBMMjUuMDY3LDgyLjY2NyBDMjQuODE1LDgyLjY2NyAyNC40MTgsODIuNzc1IDI0LjIsODIuOTAxIEwxMi42OTUsODkuNjAzIEwxMi42NjYsODkuNjIxIEwxMi42NjYsODkuNjIxIFoiIGlkPSJGaWxsLTkiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNMTIuMzcsOTAuODAxIEwxMi4zNyw4OS41NTQgTDEyLjM3LDkwLjgwMSIgaWQ9IkZpbGwtMTAiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNNi4xMyw5My45MDEgQzUuMzc5LDkzLjgwOCA0LjgxNiw5My4xNjQgNC42OTEsOTIuNTI1IEMzLjg2LDg4LjI4NyAzLjU0LDgzLjc0MyAzLjUyNiw3MS4xNzMgQzMuNTExLDU4LjM4OSA0LjQyMyw1MS40MjggNC40MjMsNTEuNDI4IEM1LjEzNCw0Ny4yODIgNy4yMSw0Ni4yMzYgNy4yMSw0Ni4yMzYgQzcuMjEsNDYuMjM2IDgxLjY2NywzLjI1IDgyLjA2OSwzLjAxNyBDODIuMjkyLDIuODg4IDg0LjU1NiwxLjQzMyA4NS4yNjQsMy45NCBDODcuMjE0LDEwLjg0IDg2Ljc1MiwzNS44MjcgODUuNTM5LDQzLjgxOCBDODUuMTUsNDYuMzgzIDg0LjI5MSw0OS4wMzMgODIuNDgzLDUwLjEwMSBMNy4yMSw5My42NTMgQzYuODI4LDkzLjg3NCA2LjQ2MSw5My45NDEgNi4xMyw5My45MDEgQzYuMTMsOTMuOTAxIDMuMzQ5LDkzLjQ2IDMuMTI5LDkxLjc3NiBDMi41NjgsODcuNDk1IDEuOTc3LDgyLjk5NSAxLjk2Miw3MC40MjUgQzEuOTQ4LDU3LjY0MSAyLjg2LDUwLjY4IDIuODYsNTAuNjggQzMuNTcsNDYuNTM0IDUuNjQ3LDQ1LjQ4OSA1LjY0Nyw0NS40ODkgQzUuNjQ2LDQ1LjQ4OSA4LjA2NSw0NC4wOTIgMTIuMjQ1LDQxLjY3OSBMMTMuMTE2LDQxLjU2IEwxOS43MTUsMzcuNzMgTDE5Ljc2MSwzNy4yNjkgTDYuMTMsOTMuOTAxIiBpZD0iRmlsbC0xMSIgZmlsbD0iI0ZBRkFGQSI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik02LjMxNyw5NC4xNjEgTDYuMTAyLDk0LjE0OCBMNi4xMDEsOTQuMTQ4IEw1Ljg1Nyw5NC4xMDEgQzUuMTM4LDkzLjk0NSAzLjA4NSw5My4zNjUgMi44ODEsOTEuODA5IEMyLjMxMyw4Ny40NjkgMS43MjcsODIuOTk2IDEuNzEzLDcwLjQyNSBDMS42OTksNTcuNzcxIDIuNjA0LDUwLjcxOCAyLjYxMyw1MC42NDggQzMuMzM4LDQ2LjQxNyA1LjQ0NSw0NS4zMSA1LjUzNSw0NS4yNjYgTDEyLjE2Myw0MS40MzkgTDEzLjAzMyw0MS4zMiBMMTkuNDc5LDM3LjU3OCBMMTkuNTEzLDM3LjI0NCBDMTkuNTI2LDM3LjEwNyAxOS42NDcsMzcuMDA4IDE5Ljc4NiwzNy4wMjEgQzE5LjkyMiwzNy4wMzQgMjAuMDIzLDM3LjE1NiAyMC4wMDksMzcuMjkzIEwxOS45NSwzNy44ODIgTDEzLjE5OCw0MS44MDEgTDEyLjMyOCw0MS45MTkgTDUuNzcyLDQ1LjcwNCBDNS43NDEsNDUuNzIgMy43ODIsNDYuNzcyIDMuMTA2LDUwLjcyMiBDMy4wOTksNTAuNzgyIDIuMTk4LDU3LjgwOCAyLjIxMiw3MC40MjQgQzIuMjI2LDgyLjk2MyAyLjgwOSw4Ny40MiAzLjM3Myw5MS43MjkgQzMuNDY0LDkyLjQyIDQuMDYyLDkyLjg4MyA0LjY4Miw5My4xODEgQzQuNTY2LDkyLjk4NCA0LjQ4Niw5Mi43NzYgNC40NDYsOTIuNTcyIEMzLjY2NSw4OC41ODggMy4yOTEsODQuMzcgMy4yNzYsNzEuMTczIEMzLjI2Miw1OC41MiA0LjE2Nyw1MS40NjYgNC4xNzYsNTEuMzk2IEM0LjkwMSw0Ny4xNjUgNy4wMDgsNDYuMDU5IDcuMDk4LDQ2LjAxNCBDNy4wOTQsNDYuMDE1IDgxLjU0MiwzLjAzNCA4MS45NDQsMi44MDIgTDgxLjk3MiwyLjc4NSBDODIuODc2LDIuMjQ3IDgzLjY5MiwyLjA5NyA4NC4zMzIsMi4zNTIgQzg0Ljg4NywyLjU3MyA4NS4yODEsMy4wODUgODUuNTA0LDMuODcyIEM4Ny41MTgsMTEgODYuOTY0LDM2LjA5MSA4NS43ODUsNDMuODU1IEM4NS4yNzgsNDcuMTk2IDg0LjIxLDQ5LjM3IDgyLjYxLDUwLjMxNyBMNy4zMzUsOTMuODY5IEM2Ljk5OSw5NC4wNjMgNi42NTgsOTQuMTYxIDYuMzE3LDk0LjE2MSBMNi4zMTcsOTQuMTYxIFogTTYuMTcsOTMuNjU0IEM2LjQ2Myw5My42OSA2Ljc3NCw5My42MTcgNy4wODUsOTMuNDM3IEw4Mi4zNTgsNDkuODg2IEM4NC4xODEsNDguODA4IDg0Ljk2LDQ1Ljk3MSA4NS4yOTIsNDMuNzggQzg2LjQ2NiwzNi4wNDkgODcuMDIzLDExLjA4NSA4NS4wMjQsNC4wMDggQzg0Ljg0NiwzLjM3NyA4NC41NTEsMi45NzYgODQuMTQ4LDIuODE2IEM4My42NjQsMi42MjMgODIuOTgyLDIuNzY0IDgyLjIyNywzLjIxMyBMODIuMTkzLDMuMjM0IEM4MS43OTEsMy40NjYgNy4zMzUsNDYuNDUyIDcuMzM1LDQ2LjQ1MiBDNy4zMDQsNDYuNDY5IDUuMzQ2LDQ3LjUyMSA0LjY2OSw1MS40NzEgQzQuNjYyLDUxLjUzIDMuNzYxLDU4LjU1NiAzLjc3NSw3MS4xNzMgQzMuNzksODQuMzI4IDQuMTYxLDg4LjUyNCA0LjkzNiw5Mi40NzYgQzUuMDI2LDkyLjkzNyA1LjQxMiw5My40NTkgNS45NzMsOTMuNjE1IEM2LjA4Nyw5My42NCA2LjE1OCw5My42NTIgNi4xNjksOTMuNjU0IEw2LjE3LDkzLjY1NCBMNi4xNyw5My42NTQgWiIgaWQ9IkZpbGwtMTIiIGZpbGw9IiM0NTVBNjQiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNNy4zMTcsNjguOTgyIEM3LjgwNiw2OC43MDEgOC4yMDIsNjguOTI2IDguMjAyLDY5LjQ4NyBDOC4yMDIsNzAuMDQ3IDcuODA2LDcwLjczIDcuMzE3LDcxLjAxMiBDNi44MjksNzEuMjk0IDYuNDMzLDcxLjA2OSA2LjQzMyw3MC41MDggQzYuNDMzLDY5Ljk0OCA2LjgyOSw2OS4yNjUgNy4zMTcsNjguOTgyIiBpZD0iRmlsbC0xMyIgZmlsbD0iI0ZGRkZGRiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik02LjkyLDcxLjEzMyBDNi42MzEsNzEuMTMzIDYuNDMzLDcwLjkwNSA2LjQzMyw3MC41MDggQzYuNDMzLDY5Ljk0OCA2LjgyOSw2OS4yNjUgNy4zMTcsNjguOTgyIEM3LjQ2LDY4LjkgNy41OTUsNjguODYxIDcuNzE0LDY4Ljg2MSBDOC4wMDMsNjguODYxIDguMjAyLDY5LjA5IDguMjAyLDY5LjQ4NyBDOC4yMDIsNzAuMDQ3IDcuODA2LDcwLjczIDcuMzE3LDcxLjAxMiBDNy4xNzQsNzEuMDk0IDcuMDM5LDcxLjEzMyA2LjkyLDcxLjEzMyBNNy43MTQsNjguNjc0IEM3LjU1Nyw2OC42NzQgNy4zOTIsNjguNzIzIDcuMjI0LDY4LjgyMSBDNi42NzYsNjkuMTM4IDYuMjQ2LDY5Ljg3OSA2LjI0Niw3MC41MDggQzYuMjQ2LDcwLjk5NCA2LjUxNyw3MS4zMiA2LjkyLDcxLjMyIEM3LjA3OCw3MS4zMiA3LjI0Myw3MS4yNzEgNy40MTEsNzEuMTc0IEM3Ljk1OSw3MC44NTcgOC4zODksNzAuMTE3IDguMzg5LDY5LjQ4NyBDOC4zODksNjkuMDAxIDguMTE3LDY4LjY3NCA3LjcxNCw2OC42NzQiIGlkPSJGaWxsLTE0IiBmaWxsPSIjODA5N0EyIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTYuOTIsNzAuOTQ3IEM2LjY0OSw3MC45NDcgNi42MjEsNzAuNjQgNi42MjEsNzAuNTA4IEM2LjYyMSw3MC4wMTcgNi45ODIsNjkuMzkyIDcuNDExLDY5LjE0NSBDNy41MjEsNjkuMDgyIDcuNjI1LDY5LjA0OSA3LjcxNCw2OS4wNDkgQzcuOTg2LDY5LjA0OSA4LjAxNSw2OS4zNTUgOC4wMTUsNjkuNDg3IEM4LjAxNSw2OS45NzggNy42NTIsNzAuNjAzIDcuMjI0LDcwLjg1MSBDNy4xMTUsNzAuOTE0IDcuMDEsNzAuOTQ3IDYuOTIsNzAuOTQ3IE03LjcxNCw2OC44NjEgQzcuNTk1LDY4Ljg2MSA3LjQ2LDY4LjkgNy4zMTcsNjguOTgyIEM2LjgyOSw2OS4yNjUgNi40MzMsNjkuOTQ4IDYuNDMzLDcwLjUwOCBDNi40MzMsNzAuOTA1IDYuNjMxLDcxLjEzMyA2LjkyLDcxLjEzMyBDNy4wMzksNzEuMTMzIDcuMTc0LDcxLjA5NCA3LjMxNyw3MS4wMTIgQzcuODA2LDcwLjczIDguMjAyLDcwLjA0NyA4LjIwMiw2OS40ODcgQzguMjAyLDY5LjA5IDguMDAzLDY4Ljg2MSA3LjcxNCw2OC44NjEiIGlkPSJGaWxsLTE1IiBmaWxsPSIjODA5N0EyIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTcuNDQ0LDg1LjM1IEM3LjcwOCw4NS4xOTggNy45MjEsODUuMzE5IDcuOTIxLDg1LjYyMiBDNy45MjEsODUuOTI1IDcuNzA4LDg2LjI5MiA3LjQ0NCw4Ni40NDQgQzcuMTgxLDg2LjU5NyA2Ljk2Nyw4Ni40NzUgNi45NjcsODYuMTczIEM2Ljk2Nyw4NS44NzEgNy4xODEsODUuNTAyIDcuNDQ0LDg1LjM1IiBpZD0iRmlsbC0xNiIgZmlsbD0iI0ZGRkZGRiI+PC9wYXRoPgogICAgICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik03LjIzLDg2LjUxIEM3LjA3NCw4Ni41MSA2Ljk2Nyw4Ni4zODcgNi45NjcsODYuMTczIEM2Ljk2Nyw4NS44NzEgNy4xODEsODUuNTAyIDcuNDQ0LDg1LjM1IEM3LjUyMSw4NS4zMDUgNy41OTQsODUuMjg0IDcuNjU4LDg1LjI4NCBDNy44MTQsODUuMjg0IDcuOTIxLDg1LjQwOCA3LjkyMSw4NS42MjIgQzcuOTIxLDg1LjkyNSA3LjcwOCw4Ni4yOTIgNy40NDQsODYuNDQ0IEM3LjM2Nyw4Ni40ODkgNy4yOTQsODYuNTEgNy4yMyw4Ni41MSBNNy42NTgsODUuMDk4IEM3LjU1OCw4NS4wOTggNy40NTUsODUuMTI3IDcuMzUxLDg1LjE4OCBDNy4wMzEsODUuMzczIDYuNzgxLDg1LjgwNiA2Ljc4MSw4Ni4xNzMgQzYuNzgxLDg2LjQ4MiA2Ljk2Niw4Ni42OTcgNy4yMyw4Ni42OTcgQzcuMzMsODYuNjk3IDcuNDMzLDg2LjY2NiA3LjUzOCw4Ni42MDcgQzcuODU4LDg2LjQyMiA4LjEwOCw4NS45ODkgOC4xMDgsODUuNjIyIEM4LjEwOCw4NS4zMTMgNy45MjMsODUuMDk4IDcuNjU4LDg1LjA5OCIgaWQ9IkZpbGwtMTciIGZpbGw9IiM4MDk3QTIiPjwvcGF0aD4KICAgICAgICAgICAgICAgICAgICA8cGF0aCBkPSJNNy4yMyw4Ni4zMjIgTDcuMTU0LDg2LjE3MyBDNy4xNTQsODUuOTM4IDcuMzMzLDg1LjYyOSA3LjUzOCw4NS41MTIgTDcuNjU4LDg1LjQ3MSBMNy43MzQsODUuNjIyIEM3LjczNCw4NS44NTYgNy41NTUsODYuMTY0IDcuMzUxLDg2LjI4MiBMNy4yMyw4Ni4zMjIgTTcuNjU4LDg1LjI4NCBDNy41OTQsODUuMjg0IDcuNTIxLDg1LjMwNSA3LjQ0NCw4NS4zNSBDNy4xODEsODUuNTAyIDYuOTY3LDg1Ljg3MSA2Ljk2Nyw4Ni4xNzMgQzYuOTY3LDg2LjM4NyA3LjA3NCw4Ni41MSA3LjIzLDg2LjUxIEM3LjI5NCw4Ni41MSA3LjM2Nyw4Ni40ODkgNy40NDQsODYuNDQ0IEM3LjcwOCw4Ni4yOTIgNy45MjEsODUuOTI1IDcuOTIxLDg1LjYyMiBDNy45MjEsODUuNDA4IDcuODE0LDg1LjI4NCA3LjY1OCw4NS4yODQiIGlkPSJGaWxsLTE4IiBmaWxsPSIjODA5N0EyIj48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTc3LjI3OCw3Ljc2OSBMNzcuMjc4LDUxLjQzNiBMMTAuMjA4LDkwLjE2IEwxMC4yMDgsNDYuNDkzIEw3Ny4yNzgsNy43NjkiIGlkPSJGaWxsLTE5IiBmaWxsPSIjNDU1QTY0Ij48L3BhdGg+CiAgICAgICAgICAgICAgICAgICAgPHBhdGggZD0iTTEwLjA4Myw5MC4zNzUgTDEwLjA4Myw0Ni40MjEgTDEwLjE0Niw0Ni4zODUgTDc3LjQwMyw3LjU1NCBMNzcuNDAzLDUxLjUwOCBMNzcuMzQxLDUxLjU0NCBMMTAuMDgzLDkwLjM3NSBMMTAuMDgzLDkwLjM3NSBaIE0xMC4zMzMsNDYuNTY0IEwxMC4zMzMsODkuOTQ0IEw3Ny4xNTQsNTEuMzY1IEw3Ny4xNTQsNy45ODUgTDEwLjMzMyw0Ni41NjQgTDEwLjMzMyw0Ni41NjQgWiIgaWQ9IkZpbGwtMjAiIGZpbGw9IiM2MDdEOEIiPjwvcGF0aD4KICAgICAgICAgICAgICAgIDwvZz4KICAgICAgICAgICAgICAgIDxwYXRoIGQ9Ik0xMjUuNzM3LDg4LjY0NyBMMTE4LjA5OCw5MS45ODEgTDExOC4wOTgsODQgTDEwNi42MzksODguNzEzIEwxMDYuNjM5LDk2Ljk4MiBMOTksMTAwLjMxNSBMMTEyLjM2OSwxMDMuOTYxIEwxMjUuNzM3LDg4LjY0NyIgaWQ9IkltcG9ydGVkLUxheWVycy1Db3B5LTIiIGZpbGw9IiM0NTVBNjQiIHNrZXRjaDp0eXBlPSJNU1NoYXBlR3JvdXAiPjwvcGF0aD4KICAgICAgICAgICAgPC9nPgogICAgICAgIDwvZz4KICAgIDwvZz4KPC9zdmc+');
 };
 
 module.exports = RotateInstructions;
@@ -4583,8 +4794,6 @@ module.exports = RotateInstructions;
 var SensorSample = _dereq_('./sensor-sample.js');
 var MathUtil = _dereq_('../math-util.js');
 var Util = _dereq_('../util.js');
-
-var DEBUG = false;
 
 /**
  * An implementation of a simple complementary filter, which fuses gyroscope and
@@ -4684,7 +4893,7 @@ ComplementaryFilter.prototype.run_ = function() {
   deltaQ.setFromUnitVectors(this.estimatedGravity, this.measuredGravity);
   deltaQ.inverse();
 
-  if (DEBUG) {
+  if (Util.isDebug()) {
     console.log('Delta: %d deg, G_est: (%s, %s, %s), G_meas: (%s, %s, %s)',
                 MathUtil.radToDeg * Util.getQuaternionAngle(deltaQ),
                 (this.estimatedGravity.x).toFixed(1),
@@ -4755,190 +4964,212 @@ var TouchPanner = _dereq_('../touch-panner.js');
 var MathUtil = _dereq_('../math-util.js');
 var Util = _dereq_('../util.js');
 
-window.registerIframeWindowFix = function () {
-
-};
-window.registerIframeWindowFix();
-
-module.exports.registerIframeWindowFix = window.registerIframeWindowFix;
 /**
  * The pose sensor, implemented using DeviceMotion APIs.
  */
 function FusionPoseSensor() {
-	this.deviceId = 'webvr-polyfill:fused';
-	this.deviceName = 'VR Position Device (webvr-polyfill:fused)';
+  this.deviceId = 'webvr-polyfill:fused';
+  this.deviceName = 'VR Position Device (webvr-polyfill:fused)';
 
-	this.accelerometer = new MathUtil.Vector3();
-	this.gyroscope = new MathUtil.Vector3();
+  this.accelerometer = new MathUtil.Vector3();
+  this.gyroscope = new MathUtil.Vector3();
 
-	var DeviceMotionChange = this.onDeviceMotionChange_.bind(this);
-	var ScreenOrientationChange = this.onScreenOrientationChange_.bind(this);
+  this.start();
 
+  this.filter = new ComplementaryFilter(WebVRConfig.K_FILTER);
+  this.posePredictor = new PosePredictor(WebVRConfig.PREDICTION_TIME_S);
+  this.touchPanner = new TouchPanner();
 
-	window.addEventListener('devicemotion', function (e) {
-		//if (Util.isIOS() && window.parent == window)
-		//	dispatchWindowEventAsMessage('devicemotion', e);
-		DeviceMotionChange(e);
-	});
+  this.filterToWorldQ = new MathUtil.Quaternion();
 
-	window.addEventListener('orientationchange', function (e) {
-		//if (Util.isIOS() && window.parent == window)
-		//	dispatchWindowEventAsMessage('orientationchange', e);
-		ScreenOrientationChange(e)
-	});
+  // Set the filter to world transform, depending on OS.
+  if (Util.isIOS()) {
+    this.filterToWorldQ.setFromAxisAngle(new MathUtil.Vector3(1, 0, 0), Math.PI / 2);
+  } else {
+    this.filterToWorldQ.setFromAxisAngle(new MathUtil.Vector3(1, 0, 0), -Math.PI / 2);
+  }
 
+  this.inverseWorldToScreenQ = new MathUtil.Quaternion();
+  this.worldToScreenQ = new MathUtil.Quaternion();
+  this.originalPoseAdjustQ = new MathUtil.Quaternion();
+  this.originalPoseAdjustQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1),
+                                           -window.orientation * Math.PI / 180);
 
-	//registerIframeWindowFix();
+  this.setScreenTransform_();
+  // Adjust this filter for being in landscape mode.
+  if (Util.isLandscapeMode()) {
+    this.filterToWorldQ.multiply(this.inverseWorldToScreenQ);
+  }
 
-	//window.addEventListener('devicemotion', this.onDeviceMotionChange_.bind(this));
-	//window.addEventListener('orientationchange', this.onScreenOrientationChange_.bind(this));
+  // Keep track of a reset transform for resetSensor.
+  this.resetQ = new MathUtil.Quaternion();
 
-	this.filter = new ComplementaryFilter(WebVRConfig.K_FILTER);
-	this.posePredictor = new PosePredictor(WebVRConfig.PREDICTION_TIME_S);
-	this.touchPanner = new TouchPanner();
+  this.isFirefoxAndroid = Util.isFirefoxAndroid();
+  this.isIOS = Util.isIOS();
 
-	this.filterToWorldQ = new MathUtil.Quaternion();
-
-	// Set the filter to world transform, depending on OS.
-	if (Util.isIOS()) {
-		this.filterToWorldQ.setFromAxisAngle(new MathUtil.Vector3(1, 0, 0), Math.PI / 2);
-	} else {
-		this.filterToWorldQ.setFromAxisAngle(new MathUtil.Vector3(1, 0, 0), -Math.PI / 2);
-	}
-
-	this.inverseWorldToScreenQ = new MathUtil.Quaternion();
-	this.worldToScreenQ = new MathUtil.Quaternion();
-	this.originalPoseAdjustQ = new MathUtil.Quaternion();
-	this.originalPoseAdjustQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1),
-		-window.orientation * Math.PI / 180);
-
-	this.setScreenTransform_();
-	// Adjust this filter for being in landscape mode.
-	if (Util.isLandscapeMode()) {
-		this.filterToWorldQ.multiply(this.inverseWorldToScreenQ);
-	}
-
-	// Keep track of a reset transform for resetSensor.
-	this.resetQ = new MathUtil.Quaternion();
-
-	this.isFirefoxAndroid = Util.isFirefoxAndroid();
-	this.isIOS = Util.isIOS();
-
-	this.orientationOut_ = new Float32Array(4);
+  this.orientationOut_ = new Float32Array(4);
 }
 
-FusionPoseSensor.prototype.getPosition = function () {
-	// This PoseSensor doesn't support position
-	return null;
+FusionPoseSensor.prototype.getPosition = function() {
+  // This PoseSensor doesn't support position
+  return null;
 };
 
-FusionPoseSensor.prototype.getOrientation = function () {
-	// Convert from filter space to the the same system used by the
-	// deviceorientation event.
-	var orientation = this.filter.getOrientation();
+FusionPoseSensor.prototype.getOrientation = function() {
+  // Convert from filter space to the the same system used by the
+  // deviceorientation event.
+  var orientation = this.filter.getOrientation();
 
-	// Predict orientation.
-	this.predictedQ = this.posePredictor.getPrediction(orientation, this.gyroscope, this.previousTimestampS);
+  // Predict orientation.
+  this.predictedQ = this.posePredictor.getPrediction(orientation, this.gyroscope, this.previousTimestampS);
 
-	// Convert to THREE coordinate system: -Z forward, Y up, X right.
-	var out = new MathUtil.Quaternion();
-	out.copy(this.filterToWorldQ);
-	out.multiply(this.resetQ);
-	if (!WebVRConfig.TOUCH_PANNER_DISABLED) {
-		out.multiply(this.touchPanner.getOrientation());
-	}
-	out.multiply(this.predictedQ);
-	out.multiply(this.worldToScreenQ);
+  // Convert to THREE coordinate system: -Z forward, Y up, X right.
+  var out = new MathUtil.Quaternion();
+  out.copy(this.filterToWorldQ);
+  out.multiply(this.resetQ);
+  if (!WebVRConfig.TOUCH_PANNER_DISABLED) {
+    out.multiply(this.touchPanner.getOrientation());
+  }
+  out.multiply(this.predictedQ);
+  out.multiply(this.worldToScreenQ);
 
-	// Handle the yaw-only case.
-	if (WebVRConfig.YAW_ONLY) {
-		// Make a quaternion that only turns around the Y-axis.
-		out.x = 0;
-		out.z = 0;
-		out.normalize();
-	}
+  // Handle the yaw-only case.
+  if (WebVRConfig.YAW_ONLY) {
+    // Make a quaternion that only turns around the Y-axis.
+    out.x = 0;
+    out.z = 0;
+    out.normalize();
+  }
 
-	this.orientationOut_[0] = out.x;
-	this.orientationOut_[1] = out.y;
-	this.orientationOut_[2] = out.z;
-	this.orientationOut_[3] = out.w;
-	return this.orientationOut_;
+  this.orientationOut_[0] = out.x;
+  this.orientationOut_[1] = out.y;
+  this.orientationOut_[2] = out.z;
+  this.orientationOut_[3] = out.w;
+  return this.orientationOut_;
 };
 
-FusionPoseSensor.prototype.resetPose = function () {
-	// Reduce to inverted yaw-only.
-	this.resetQ.copy(this.filter.getOrientation());
-	this.resetQ.x = 0;
-	this.resetQ.y = 0;
-	this.resetQ.z *= -1;
-	this.resetQ.normalize();
+FusionPoseSensor.prototype.resetPose = function() {
+  // Reduce to inverted yaw-only.
+  this.resetQ.copy(this.filter.getOrientation());
+  this.resetQ.x = 0;
+  this.resetQ.y = 0;
+  this.resetQ.z *= -1;
+  this.resetQ.normalize();
 
-	// Take into account extra transformations in landscape mode.
-	if (Util.isLandscapeMode()) {
-		this.resetQ.multiply(this.inverseWorldToScreenQ);
-	}
+  // Take into account extra transformations in landscape mode.
+  if (Util.isLandscapeMode()) {
+    this.resetQ.multiply(this.inverseWorldToScreenQ);
+  }
 
-	// Take into account original pose.
-	this.resetQ.multiply(this.originalPoseAdjustQ);
+  // Take into account original pose.
+  this.resetQ.multiply(this.originalPoseAdjustQ);
 
-	if (!WebVRConfig.TOUCH_PANNER_DISABLED) {
-		this.touchPanner.resetSensor();
-	}
+  if (!WebVRConfig.TOUCH_PANNER_DISABLED) {
+    this.touchPanner.resetSensor();
+  }
 };
 
-FusionPoseSensor.prototype.onDeviceMotionChange_ = function (deviceMotion) {
-	var accGravity = deviceMotion.accelerationIncludingGravity;
-	var rotRate = deviceMotion.rotationRate;
-	var timestampS = deviceMotion.timeStamp / 1000;
-
-	// Firefox Android timeStamp returns one thousandth of a millisecond.
-	if (this.isFirefoxAndroid) {
-		timestampS /= 1000;
-	}
-
-	var deltaS = timestampS - this.previousTimestampS;
-	if (deltaS <= Util.MIN_TIMESTEP || deltaS > Util.MAX_TIMESTEP) {
-		console.warn('Invalid timestamps detected. Time step between successive ' +
-			'gyroscope sensor samples is very small or not monotonic');
-		this.previousTimestampS = timestampS;
-		return;
-	}
-	this.accelerometer.set(-accGravity.x, -accGravity.y, -accGravity.z);
-	this.gyroscope.set(rotRate.alpha, rotRate.beta, rotRate.gamma);
-
-	// With iOS and Firefox Android, rotationRate is reported in degrees,
-	// so we first convert to radians.
-	if (this.isIOS || this.isFirefoxAndroid) {
-		this.gyroscope.multiplyScalar(Math.PI / 180);
-	}
-
-	this.filter.addAccelMeasurement(this.accelerometer, timestampS);
-	this.filter.addGyroMeasurement(this.gyroscope, timestampS);
-
-	this.previousTimestampS = timestampS;
+FusionPoseSensor.prototype.onDeviceMotion_ = function(deviceMotion) {
+  this.updateDeviceMotion_(deviceMotion);
 };
 
-FusionPoseSensor.prototype.onScreenOrientationChange_ = function (screenOrientation) {
-	this.setScreenTransform_();
+FusionPoseSensor.prototype.updateDeviceMotion_ = function(deviceMotion) {
+  var accGravity = deviceMotion.accelerationIncludingGravity;
+  var rotRate = deviceMotion.rotationRate;
+  var timestampS = deviceMotion.timeStamp / 1000;
+
+  // Firefox Android timeStamp returns one thousandth of a millisecond.
+  if (this.isFirefoxAndroid) {
+    timestampS /= 1000;
+  }
+
+  var deltaS = timestampS - this.previousTimestampS;
+  if (deltaS <= Util.MIN_TIMESTEP || deltaS > Util.MAX_TIMESTEP) {
+    console.warn('Invalid timestamps detected. Time step between successive ' +
+                 'gyroscope sensor samples is very small or not monotonic');
+    this.previousTimestampS = timestampS;
+    return;
+  }
+  this.accelerometer.set(-accGravity.x, -accGravity.y, -accGravity.z);
+  this.gyroscope.set(rotRate.alpha, rotRate.beta, rotRate.gamma);
+
+  // With iOS and Firefox Android, rotationRate is reported in degrees,
+  // so we first convert to radians.
+  if (this.isIOS || this.isFirefoxAndroid) {
+    this.gyroscope.multiplyScalar(Math.PI / 180);
+  }
+
+  this.filter.addAccelMeasurement(this.accelerometer, timestampS);
+  this.filter.addGyroMeasurement(this.gyroscope, timestampS);
+
+  this.previousTimestampS = timestampS;
 };
 
-FusionPoseSensor.prototype.setScreenTransform_ = function () {
-	this.worldToScreenQ.set(0, 0, 0, 1);
-	switch (window.orientation) {
-		case 0:
-			break;
-		case 90:
-			this.worldToScreenQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1), -Math.PI / 2);
-			break;
-		case -90:
-			this.worldToScreenQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1), Math.PI / 2);
-			break;
-		case 180:
-			// TODO.
-			break;
-	}
-	this.inverseWorldToScreenQ.copy(this.worldToScreenQ);
-	this.inverseWorldToScreenQ.inverse();
+FusionPoseSensor.prototype.onOrientationChange_ = function(screenOrientation) {
+  this.setScreenTransform_();
+};
+
+/**
+ * This is only needed if we are in an cross origin iframe on iOS to work around
+ * this issue: https://bugs.webkit.org/show_bug.cgi?id=152299.
+ */
+FusionPoseSensor.prototype.onMessage_ = function(event) {
+  var message = event.data;
+
+  // If there's no message type, ignore it.
+  if (!message || !message.type) {
+    return;
+  }
+
+  // Ignore all messages that aren't devicemotion.
+  var type = message.type.toLowerCase();
+  if (type !== 'devicemotion') {
+    return;
+  }
+
+  // Update device motion.
+  this.updateDeviceMotion_(message.deviceMotionEvent);
+};
+
+FusionPoseSensor.prototype.setScreenTransform_ = function() {
+  this.worldToScreenQ.set(0, 0, 0, 1);
+  switch (window.orientation) {
+    case 0:
+      break;
+    case 90:
+      this.worldToScreenQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1), -Math.PI / 2);
+      break;
+    case -90:
+      this.worldToScreenQ.setFromAxisAngle(new MathUtil.Vector3(0, 0, 1), Math.PI / 2);
+      break;
+    case 180:
+      // TODO.
+      break;
+  }
+  this.inverseWorldToScreenQ.copy(this.worldToScreenQ);
+  this.inverseWorldToScreenQ.inverse();
+};
+
+FusionPoseSensor.prototype.start = function() {
+  this.onDeviceMotionCallback_ = this.onDeviceMotion_.bind(this);
+  this.onOrientationChangeCallback_ = this.onOrientationChange_.bind(this);
+  this.onMessageCallback_ = this.onMessage_.bind(this);
+
+  // Only listen for postMessages if we're in an iOS and embedded inside a cross
+  // domain IFrame. In this case, the polyfill can still work if the containing
+  // page sends synthetic devicemotion events. For an example of this, see
+  // iframe-message-sender.js in VR View: https://goo.gl/XDtvFZ
+  if (Util.isIOS() && Util.isInsideCrossDomainIFrame()) {
+    window.addEventListener('message', this.onMessageCallback_);
+  }
+  window.addEventListener('orientationchange', this.onOrientationChangeCallback_);
+  window.addEventListener('devicemotion', this.onDeviceMotionCallback_);
+};
+
+FusionPoseSensor.prototype.stop = function() {
+  window.removeEventListener('devicemotion', this.onDeviceMotionCallback_);
+  window.removeEventListener('orientationchange', this.onOrientationChangeCallback_);
+  window.removeEventListener('message', this.onMessageCallback_);
 };
 
 module.exports = FusionPoseSensor;
@@ -4958,8 +5189,8 @@ module.exports = FusionPoseSensor;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-var MathUtil = _dereq_('../math-util.js');
-var DEBUG = false;
+var MathUtil = _dereq_('../math-util');
+var Util = _dereq_('../util');
 
 /**
  * Given an orientation and the gyroscope data, predicts the future orientation
@@ -5000,7 +5231,7 @@ PosePredictor.prototype.getPrediction = function(currentQ, gyro, timestampS) {
 
   // If we're rotating slowly, don't do prediction.
   if (angularSpeed < MathUtil.degToRad * 20) {
-    if (DEBUG) {
+    if (Util.isDebug()) {
       console.log('Moving slowly, at %s deg/s: no prediction',
                   (MathUtil.radToDeg * angularSpeed).toFixed(1));
     }
@@ -5026,7 +5257,7 @@ PosePredictor.prototype.getPrediction = function(currentQ, gyro, timestampS) {
 
 module.exports = PosePredictor;
 
-},{"../math-util.js":14}],20:[function(_dereq_,module,exports){
+},{"../math-util":14,"../util":22}],20:[function(_dereq_,module,exports){
 function SensorSample(sample, timestampS) {
   this.set(sample, timestampS);
 };
@@ -5162,15 +5393,6 @@ Util.isIOS = (function() {
   };
 })();
 
-Util.isWebViewAndroid = (function() {
-  var isWebViewAndroid = navigator.userAgent.indexOf('Version') !== -1 &&
-      navigator.userAgent.indexOf('Android') !== -1 &&
-      navigator.userAgent.indexOf('Chrome') !== -1;
-  return function() {
-    return isWebViewAndroid;
-  };
-})();
-
 Util.isSafari = (function() {
   var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   return function() {
@@ -5215,9 +5437,6 @@ Util.getScreenHeight = function() {
 };
 
 Util.requestFullscreen = function(element) {
-  if (Util.isWebViewAndroid()) {
-      return false;
-  }
   if (element.requestFullscreen) {
     element.requestFullscreen();
   } else if (element.webkitRequestFullscreen) {
@@ -5234,7 +5453,6 @@ Util.requestFullscreen = function(element) {
 };
 
 Util.exitFullscreen = function() {
-
   if (document.exitFullscreen) {
     document.exitFullscreen();
   } else if (document.webkitExitFullscreen) {
@@ -5317,6 +5535,12 @@ Util.orthoMatrix = function (out, left, right, bottom, top, near, far) {
   return out;
 };
 
+Util.copyArray = function (source, dest) {
+  for (var i = 0, n = source.length; i < n; i++) {
+    dest[i] = source[i];
+  }
+};
+
 Util.isMobile = function() {
   var check = false;
   (function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4)))check = true})(navigator.userAgent||navigator.vendor||window.opera);
@@ -5338,9 +5562,7 @@ Util.safariCssSizeWorkaround = function(canvas) {
     var height = canvas.style.height;
     canvas.style.width = (parseInt(width) + 1) + 'px';
     canvas.style.height = (parseInt(height)) + 'px';
-    console.log('Resetting width to...', width);
     setTimeout(function() {
-      console.log('Done. Width is now', width);
       canvas.style.width = width;
       canvas.style.height = height;
     }, 100);
@@ -5349,6 +5571,17 @@ Util.safariCssSizeWorkaround = function(canvas) {
   // Debug only.
   window.Util = Util;
   window.canvas = canvas;
+};
+
+Util.isDebug = function() {
+  return Util.getQueryParameter('debug');
+};
+
+Util.getQueryParameter = function(name) {
+  var name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+  var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+      results = regex.exec(location.search);
+  return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
 };
 
 Util.frameDataFromPose = (function() {
@@ -5529,9 +5762,34 @@ Util.frameDataFromPose = (function() {
   };
 })();
 
+Util.isInsideCrossDomainIFrame = function() {
+  var isFramed = (window.self !== window.top);
+  var refDomain = Util.getDomainFromUrl(document.referrer);
+  var thisDomain = Util.getDomainFromUrl(window.location.href);
+
+  return isFramed && (refDomain !== thisDomain);
+};
+
+// From http://stackoverflow.com/a/23945027.
+Util.getDomainFromUrl = function(url) {
+  var domain;
+  // Find & remove protocol (http, ftp, etc.) and get domain.
+  if (url.indexOf("://") > -1) {
+    domain = url.split('/')[2];
+  }
+  else {
+    domain = url.split('/')[0];
+  }
+
+  //find & remove port number
+  domain = domain.split(':')[0];
+
+  return domain;
+}
+
 module.exports = Util;
 
-},{"object-assign":1}],23:[function(_dereq_,module,exports){
+},{"object-assign":2}],23:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -5547,9 +5805,9 @@ module.exports = Util;
  * limitations under the License.
  */
 
-var Emitter = _dereq_('./emitter.js');
-var Util = _dereq_('./util.js');
 var DeviceInfo = _dereq_('./device-info.js');
+var EventEmitter3 = _dereq_('eventemitter3');
+var Util = _dereq_('./util.js');
 
 var DEFAULT_VIEWER = 'CardboardV1';
 var VIEWER_KEY = 'WEBVR_CARDBOARD_VIEWER';
@@ -5571,13 +5829,12 @@ function ViewerSelector() {
   this.dialog = this.createDialog_(DeviceInfo.Viewers);
   this.root = null;
 }
-ViewerSelector.prototype = new Emitter();
+ViewerSelector.prototype = new EventEmitter3();
 
 ViewerSelector.prototype.show = function(root) {
   this.root = root;
 
   root.appendChild(this.dialog);
-  //console.log('ViewerSelector.show');
 
   // Ensure the currently selected item is checked.
   var selected = this.dialog.querySelector('#' + this.selectedKey);
@@ -5591,7 +5848,6 @@ ViewerSelector.prototype.hide = function() {
   if (this.root && this.root.contains(this.dialog)) {
     this.root.removeChild(this.dialog);
   }
-  //console.log('ViewerSelector.hide');
   this.dialog.style.display = 'none';
 };
 
@@ -5732,7 +5988,7 @@ ViewerSelector.prototype.createButton_ = function(label, onclick) {
 
 module.exports = ViewerSelector;
 
-},{"./device-info.js":7,"./emitter.js":12,"./util.js":22}],24:[function(_dereq_,module,exports){
+},{"./device-info.js":8,"./util.js":22,"eventemitter3":1}],24:[function(_dereq_,module,exports){
 /*
  * Copyright 2015 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -5836,200 +6092,237 @@ var VRDisplayHMDDevice = _dereq_('./display-wrappers.js').VRDisplayHMDDevice;
 var VRDisplayPositionSensorDevice = _dereq_('./display-wrappers.js').VRDisplayPositionSensorDevice;
 
 function WebVRPolyfill() {
-	this.displays = [];
-	this.devices = []; // For deprecated objects
-	this.devicesPopulated = false;
-	this.nativeWebVRAvailable = this.isWebVRAvailable();
-	this.nativeLegacyWebVRAvailable = this.isDeprecatedWebVRAvailable();
+  this.displays = [];
+  this.devices = []; // For deprecated objects
+  this.devicesPopulated = false;
+  this.nativeWebVRAvailable = this.isWebVRAvailable();
+  this.nativeLegacyWebVRAvailable = this.isDeprecatedWebVRAvailable();
+  this.nativeGetVRDisplaysFunc = this.nativeWebVRAvailable ?
+                                 navigator.getVRDisplays :
+                                 null;
 
-	if (!this.nativeLegacyWebVRAvailable) {
-		if (!this.nativeWebVRAvailable) {
-			this.enablePolyfill();
-		}
-		if (WebVRConfig.ENABLE_DEPRECATED_API) {
-			this.enableDeprecatedPolyfill();
-		}
-	}
+  if (!this.nativeLegacyWebVRAvailable) {
+    this.enablePolyfill();
+    if (WebVRConfig.ENABLE_DEPRECATED_API) {
+      this.enableDeprecatedPolyfill();
+    }
+  }
 
-	if (Util.isIOS()) {
-		var initialContent = window.document.querySelector('meta[name=viewport]').getAttribute('content');
-		window.document.querySelector('meta[name=viewport]').setAttribute('content', initialContent + ', shrink-to-fit=no');
-	}
-
-	// Put a shim in place to update the API to 1.1 if needed.
-	InstallWebVRSpecShim();
+  // Put a shim in place to update the API to 1.1 if needed.
+  InstallWebVRSpecShim();
 }
 
-WebVRPolyfill.prototype.isWebVRAvailable = function () {
-	return ('getVRDisplays' in navigator);
+WebVRPolyfill.prototype.isWebVRAvailable = function() {
+  return ('getVRDisplays' in navigator);
 };
 
-WebVRPolyfill.prototype.isDeprecatedWebVRAvailable = function () {
-	return ('getVRDevices' in navigator) || ('mozGetVRDevices' in navigator);
+WebVRPolyfill.prototype.isDeprecatedWebVRAvailable = function() {
+  return ('getVRDevices' in navigator) || ('mozGetVRDevices' in navigator);
 };
 
-WebVRPolyfill.prototype.populateDevices = function () {
-	if (this.devicesPopulated) {
-		return;
-	}
+WebVRPolyfill.prototype.populateDevices = function() {
+  if (this.devicesPopulated) {
+    return;
+  }
 
-	// Initialize our virtual VR devices.
-	var vrDisplay = null;
+  // Initialize our virtual VR devices.
+  var vrDisplay = null;
 
-	// Add a Cardboard VRDisplay on compatible mobile devices
-	if (this.isCardboardCompatible()) {
-		vrDisplay = new CardboardVRDisplay();
-		this.displays.push(vrDisplay);
+  // Add a Cardboard VRDisplay on compatible mobile devices
+  if (this.isCardboardCompatible()) {
+    vrDisplay = new CardboardVRDisplay();
+    this.displays.push(vrDisplay);
 
-		// For backwards compatibility
-		if (WebVRConfig.ENABLE_DEPRECATED_API) {
-			this.devices.push(new VRDisplayHMDDevice(vrDisplay));
-			this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
-		}
-	}
+    // For backwards compatibility
+    if (WebVRConfig.ENABLE_DEPRECATED_API) {
+      this.devices.push(new VRDisplayHMDDevice(vrDisplay));
+      this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
+    }
+  }
 
-	// Add a Mouse and Keyboard driven VRDisplay for desktops/laptops
-	if (!this.isMobile() && !WebVRConfig.MOUSE_KEYBOARD_CONTROLS_DISABLED) {
-		vrDisplay = new MouseKeyboardVRDisplay();
-		this.displays.push(vrDisplay);
+  // Add a Mouse and Keyboard driven VRDisplay for desktops/laptops
+  if (!this.isMobile() && !WebVRConfig.MOUSE_KEYBOARD_CONTROLS_DISABLED) {
+    vrDisplay = new MouseKeyboardVRDisplay();
+    this.displays.push(vrDisplay);
 
-		// For backwards compatibility
-		if (WebVRConfig.ENABLE_DEPRECATED_API) {
-			this.devices.push(new VRDisplayHMDDevice(vrDisplay));
-			this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
-		}
-	}
+    // For backwards compatibility
+    if (WebVRConfig.ENABLE_DEPRECATED_API) {
+      this.devices.push(new VRDisplayHMDDevice(vrDisplay));
+      this.devices.push(new VRDisplayPositionSensorDevice(vrDisplay));
+    }
+  }
 
-	// Uncomment to add positional tracking via webcam.
-	//if (!this.isMobile() && WebVRConfig.ENABLE_DEPRECATED_API) {
-	//  positionDevice = new WebcamPositionSensorVRDevice();
-	//  this.devices.push(positionDevice);
-	//}
+  // Uncomment to add positional tracking via webcam.
+  //if (!this.isMobile() && WebVRConfig.ENABLE_DEPRECATED_API) {
+  //  positionDevice = new WebcamPositionSensorVRDevice();
+  //  this.devices.push(positionDevice);
+  //}
 
-	this.devicesPopulated = true;
+  this.devicesPopulated = true;
 };
 
-WebVRPolyfill.prototype.enablePolyfill = function () {
-	// Provide navigator.getVRDisplays.
-	navigator.getVRDisplays = this.getVRDisplays.bind(this);
+WebVRPolyfill.prototype.enablePolyfill = function() {
+  // Provide navigator.getVRDisplays.
+  navigator.getVRDisplays = this.getVRDisplays.bind(this);
 
-	// Provide the VRDisplay object.
-	window.VRDisplay = VRDisplay;
+  // Polyfill native VRDisplay.getFrameData
+  if (this.nativeWebVRAvailable && this.isCardboardCompatible() && window.VRFrameData) {
+    var nativeFrameData = new window.VRFrameData();
+    var nativeGetFrameData = window.VRDisplay.prototype.getFrameData;
+    window.VRFrameData = VRFrameData;
 
-	// Provide navigator.vrEnabled.
-	var self = this;
-	Object.defineProperty(navigator, 'vrEnabled', {
-		get: function () {
-			return self.isCardboardCompatible() &&
-				(document.fullscreenEnabled ||
-				document.mozFullScreenEnabled ||
-				document.webkitFullscreenEnabled ||
-				false);
-		}
-	});
+    window.VRDisplay.prototype.getFrameData = function(frameData) {
+      /*
+      Copy frame data from the native object into the polyfilled object.
+      */
 
-	// Provide the VRFrameData object.
-	window.VRFrameData = VRFrameData;
+      nativeGetFrameData.call(this, nativeFrameData);
+      frameData.pose = nativeFrameData.pose;
+      Util.copyArray(nativeFrameData.leftProjectionMatrix, frameData.leftProjectionMatrix);
+      Util.copyArray(nativeFrameData.rightProjectionMatrix, frameData.rightProjectionMatrix);
+      Util.copyArray(nativeFrameData.leftViewMatrix, frameData.leftViewMatrix);
+      Util.copyArray(nativeFrameData.rightViewMatrix, frameData.rightViewMatrix);
+      //todo: copy
+    };
+  }
+
+  // Provide the `VRDisplay` object.
+  window.VRDisplay = VRDisplay;
+
+  // Provide the `navigator.vrEnabled` property.
+  if (navigator && !navigator.vrEnabled) {
+    var self = this;
+    Object.defineProperty(navigator, 'vrEnabled', {
+      get: function () {
+        return self.isCardboardCompatible() &&
+            (self.isFullScreenAvailable() || Util.isIOS());
+      }
+    });
+  }
+
+  if (!('VRFrameData' in window)) {
+    // Provide the VRFrameData object.
+    window.VRFrameData = VRFrameData;
+  }
 };
 
-WebVRPolyfill.prototype.enableDeprecatedPolyfill = function () {
-	// Provide navigator.getVRDevices.
-	navigator.getVRDevices = this.getVRDevices.bind(this);
+WebVRPolyfill.prototype.enableDeprecatedPolyfill = function() {
+  // Provide navigator.getVRDevices.
+  navigator.getVRDevices = this.getVRDevices.bind(this);
 
-	// Provide the CardboardHMDVRDevice and PositionSensorVRDevice objects.
-	window.HMDVRDevice = HMDVRDevice;
-	window.PositionSensorVRDevice = PositionSensorVRDevice;
+  // Provide the CardboardHMDVRDevice and PositionSensorVRDevice objects.
+  window.HMDVRDevice = HMDVRDevice;
+  window.PositionSensorVRDevice = PositionSensorVRDevice;
 };
 
-WebVRPolyfill.prototype.getVRDisplays = function () {
-	this.populateDevices();
-	var displays = this.displays;
-	return new Promise(function (resolve, reject) {
-		try {
-			resolve(displays);
-		} catch (e) {
-			reject(e);
-		}
-	});
+WebVRPolyfill.prototype.getVRDisplays = function() {
+  this.populateDevices();
+  var polyfillDisplays = this.displays;
+
+  if (this.nativeWebVRAvailable) {
+    return this.nativeGetVRDisplaysFunc.call(navigator).then(function(nativeDisplays) {
+      if (WebVRConfig.ALWAYS_APPEND_POLYFILL_DISPLAY) {
+        return nativeDisplays.concat(polyfillDisplays);
+      } else {
+        return nativeDisplays.length > 0 ? nativeDisplays : polyfillDisplays;
+      }
+    });
+  } else {
+    return new Promise(function(resolve, reject) {
+      try {
+        resolve(polyfillDisplays);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
 };
 
-WebVRPolyfill.prototype.getVRDevices = function () {
-	console.warn('getVRDevices is deprecated. Please update your code to use getVRDisplays instead.');
-	var self = this;
-	return new Promise(function (resolve, reject) {
-		try {
-			if (!self.devicesPopulated) {
-				if (self.nativeWebVRAvailable) {
-					return navigator.getVRDisplays(function (displays) {
-						for (var i = 0; i < displays.length; ++i) {
-							self.devices.push(new VRDisplayHMDDevice(displays[i]));
-							self.devices.push(new VRDisplayPositionSensorDevice(displays[i]));
-						}
-						self.devicesPopulated = true;
-						resolve(self.devices);
-					}, reject);
-				}
+WebVRPolyfill.prototype.getVRDevices = function() {
+  console.warn('getVRDevices is deprecated. Please update your code to use getVRDisplays instead.');
+  var self = this;
+  return new Promise(function(resolve, reject) {
+    try {
+      if (!self.devicesPopulated) {
+        if (self.nativeWebVRAvailable) {
+          return navigator.getVRDisplays(function(displays) {
+            for (var i = 0; i < displays.length; ++i) {
+              self.devices.push(new VRDisplayHMDDevice(displays[i]));
+              self.devices.push(new VRDisplayPositionSensorDevice(displays[i]));
+            }
+            self.devicesPopulated = true;
+            resolve(self.devices);
+          }, reject);
+        }
 
-				if (self.nativeLegacyWebVRAvailable) {
-					return (navigator.getVRDDevices || navigator.mozGetVRDevices)(function (devices) {
-						for (var i = 0; i < devices.length; ++i) {
-							if (devices[i] instanceof HMDVRDevice) {
-								self.devices.push(devices[i]);
-							}
-							if (devices[i] instanceof PositionSensorVRDevice) {
-								self.devices.push(devices[i]);
-							}
-						}
-						self.devicesPopulated = true;
-						resolve(self.devices);
-					}, reject);
-				}
-			}
+        if (self.nativeLegacyWebVRAvailable) {
+          return (navigator.getVRDDevices || navigator.mozGetVRDevices)(function(devices) {
+            for (var i = 0; i < devices.length; ++i) {
+              if (devices[i] instanceof HMDVRDevice) {
+                self.devices.push(devices[i]);
+              }
+              if (devices[i] instanceof PositionSensorVRDevice) {
+                self.devices.push(devices[i]);
+              }
+            }
+            self.devicesPopulated = true;
+            resolve(self.devices);
+          }, reject);
+        }
+      }
 
-			self.populateDevices();
-			resolve(self.devices);
-		} catch (e) {
-			reject(e);
-		}
-	});
+      self.populateDevices();
+      resolve(self.devices);
+    } catch (e) {
+      reject(e);
+    }
+  });
 };
 
 /**
  * Determine if a device is mobile.
  */
-WebVRPolyfill.prototype.isMobile = function () {
-	return /Android/i.test(navigator.userAgent) ||
-		/iPhone|iPad|iPod/i.test(navigator.userAgent);
+WebVRPolyfill.prototype.isMobile = function() {
+  return /Android/i.test(navigator.userAgent) ||
+      /iPhone|iPad|iPod/i.test(navigator.userAgent);
 };
 
-WebVRPolyfill.prototype.isCardboardCompatible = function () {
-	// For now, support all iOS and Android devices.
-	// Also enable the WebVRConfig.FORCE_VR flag for debugging.
-	return this.isMobile() || WebVRConfig.FORCE_ENABLE_VR;
+WebVRPolyfill.prototype.isCardboardCompatible = function() {
+  // For now, support all iOS and Android devices.
+  // Also enable the WebVRConfig.FORCE_VR flag for debugging.
+  return this.isMobile() || WebVRConfig.FORCE_ENABLE_VR;
+};
+
+WebVRPolyfill.prototype.isFullScreenAvailable = function() {
+  return (document.fullscreenEnabled ||
+          document.mozFullScreenEnabled ||
+          document.webkitFullscreenEnabled ||
+          false);
 };
 
 // Installs a shim that updates a WebVR 1.0 spec implementation to WebVR 1.1
 function InstallWebVRSpecShim() {
-	if ('VRDisplay' in window && !('VRFrameData' in window)) {
-		// Provide the VRFrameData object.
-		window.VRFrameData = VRFrameData;
+  if ('VRDisplay' in window && !('VRFrameData' in window)) {
+    // Provide the VRFrameData object.
+    window.VRFrameData = VRFrameData;
 
-		// A lot of Chrome builds don't have depthNear and depthFar, even
-		// though they're in the WebVR 1.0 spec. Patch them in if they're not present.
-		if (!('depthNear' in window.VRDisplay.prototype)) {
-			window.VRDisplay.prototype.depthNear = 0.01;
-		}
+    // A lot of Chrome builds don't have depthNear and depthFar, even
+    // though they're in the WebVR 1.0 spec. Patch them in if they're not present.
+    if(!('depthNear' in window.VRDisplay.prototype)) {
+      window.VRDisplay.prototype.depthNear = 0.01;
+    }
 
-		if (!('depthFar' in window.VRDisplay.prototype)) {
-			window.VRDisplay.prototype.depthFar = 10000.0;
-		}
+    if(!('depthFar' in window.VRDisplay.prototype)) {
+      window.VRDisplay.prototype.depthFar = 10000.0;
+    }
 
-		window.VRDisplay.prototype.getFrameData = function (frameData) {
-			return Util.frameDataFromPose(frameData, this.getPose(), this);
-		}
-	}
+    window.VRDisplay.prototype.getFrameData = function(frameData) {
+      return Util.frameDataFromPose(frameData, this.getPose(), this);
+    }
+  }
 };
 
 module.exports.WebVRPolyfill = WebVRPolyfill;
 
-},{"./base.js":2,"./cardboard-vr-display.js":5,"./display-wrappers.js":8,"./mouse-keyboard-vr-display.js":15,"./util.js":22}]},{},[13]);
+},{"./base.js":3,"./cardboard-vr-display.js":6,"./display-wrappers.js":9,"./mouse-keyboard-vr-display.js":15,"./util.js":22}]},{},[13])(13)
+});
